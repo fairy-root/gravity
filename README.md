@@ -7,6 +7,18 @@ A modern, feature-rich network stream player built with React and Shaka Player. 
 
 ---
 
+## Screenshots
+
+### Desktop
+![Desktop View](screenshots/desktop.png)
+
+### Mobile
+| Library View | Sidebar Drawer |
+|:---:|:---:|
+| ![Mobile View](screenshots/mobile.png) | ![Mobile Drawer](screenshots/mobile-drawer.png) |
+
+---
+
 ## Features
 
 - **Multi-Format Support** - Play HLS, DASH, and smooth streaming content
