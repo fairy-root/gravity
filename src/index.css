@@ -4,7 +4,7 @@
   --bg-primary: #09090b;
   --bg-secondary: #18181b;
   --bg-tertiary: #27272a;
-  --bg-glass: rgba(24, 24, 27, 0.8);
+  --bg-glass: rgba(24, 24, 27, 0.85);
   --text-primary: #fafafa;
   --text-secondary: #a1a1aa;
   --text-muted: #71717a;
@@ -33,6 +33,8 @@ html, body, #root {
   height: 100%;
   width: 100%;
   overflow: hidden;
+  /* Use dynamic viewport height for mobile browsers */
+  height: 100dvh; 
 }
 
 body {
@@ -52,6 +54,7 @@ body {
   display: grid;
   grid-template-columns: 320px 1fr;
   height: 100vh;
+  height: 100dvh;
   overflow: hidden;
 }
 
@@ -81,6 +84,8 @@ body {
   justify-content: center;
   position: relative;
   overflow: hidden;
+  width: 100%;
+  height: 100%;
 }
 
 /* Typography */
@@ -259,12 +264,78 @@ select option {
   width: 100%;
   height: 100%;
   background: #000;
+  position: relative;
+  /* Ensure it doesn't spill over */
+  display: flex;
+  overflow: hidden; 
 }
 
 video {
   width: 100%;
   height: 100%;
   object-fit: contain;
+}
+
+/* Shaka Player Desktop Defaults */
+.video-container .shaka-volume-bar-container {
+  opacity: 1 !important;
+  width: 80px !important;
+  visibility: visible !important;
+}
+
+/* Mobile Shaka Player Overrides */
+@media (max-width: 768px) {
+  /* Fix Overlapping: Reset padding since the player is contained between header and footer */
+  .video-container .shaka-controls-container {
+    padding-bottom: 4px !important; 
+    bottom: 0 !important;
+  }
+  
+  .video-container .shaka-bottom-controls {
+    padding-bottom: 4px !important;
+    margin-bottom: 0 !important;
+    width: 96% !important;
+    left: 2% !important;
+  }
+  
+  /* Larger touch targets for mobile */
+  .video-container .shaka-small-play-button,
+  .video-container .shaka-fullscreen-button,
+  .video-container .shaka-mute-button,
+  .video-container .shaka-overflow-menu-button {
+    min-width: 48px !important;
+    min-height: 48px !important;
+    padding: 10px !important;
+  }
+  
+  /* Seek bar */
+  .video-container .shaka-seek-bar-container {
+    height: 4px !important;
+    padding: 10px 0 !important;
+    margin-bottom: 4px !important;
+  }
+  
+  .video-container .shaka-seek-bar {
+    height: 4px !important;
+    border-radius: 2px !important;
+  }
+  
+  /* Controls Layout */
+  .video-container .shaka-controls-button-panel {
+    gap: 12px !important;
+    padding: 0 4px !important;
+    justify-content: flex-end;
+  }
+  
+  /* Hide volume slider on mobile - use hardware buttons */
+  .video-container .shaka-volume-bar-container {
+    display: none !important;
+  }
+
+  /* Ensure text/buffering doesn't overlap header */
+  .shaka-text-container {
+    bottom: 20% !important; 
+  }
 }
 
 /* Cards */
@@ -322,15 +393,389 @@ video {
   animation: fadeIn 0.3s ease-out;
 }
 
-/* Shaka Player - Keep volume bar always visible */
-.video-container .shaka-volume-bar-container {
-  opacity: 1 !important;
-  width: 80px !important;
-  visibility: visible !important;
+/* Library Action Buttons */
+.library-action-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 14px;
+  font-size: 0.8rem;
 }
 
-/* List View Hover */
+.library-action-btn .btn-icon {
+  display: none;
+}
+
+.library-action-btn .btn-text {
+  display: inline;
+}
+
 .list-item-hover:hover {
   border-color: var(--border-light);
   background: var(--bg-tertiary);
+}
+
+/* ===== MOBILE RESPONSIVENESS ===== */
+
+/* Mobile Navigation Header */
+.mobile-nav {
+  display: none;
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 56px;
+  background: var(--bg-glass);
+  backdrop-filter: blur(20px);
+  border-bottom: 1px solid var(--border);
+  z-index: 1000;
+  padding: 0 16px;
+  align-items: center;
+  gap: 12px;
+}
+
+.mobile-nav h1 {
+  font-size: 1.2rem;
+  flex: 1;
+}
+
+.hamburger-btn {
+  width: 44px;
+  height: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  border: none;
+  color: var(--text-primary);
+  cursor: pointer;
+  border-radius: var(--radius-md);
+  transition: var(--transition);
+}
+
+.hamburger-btn:hover {
+  background: var(--bg-tertiary);
+}
+
+.hamburger-btn svg {
+  width: 24px;
+  height: 24px;
+}
+
+/* Mobile Drawer Overlay */
+.drawer-overlay {
+  display: none;
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.6);
+  backdrop-filter: blur(4px);
+  z-index: 1001;
+  opacity: 0;
+  transition: opacity 0.3s ease;
+}
+
+.drawer-overlay.open {
+  opacity: 1;
+}
+
+/* Mobile Sidebar Drawer */
+.sidebar-mobile-drawer {
+  position: fixed;
+  top: 0;
+  left: 0;
+  bottom: 0;
+  width: 85%;
+  max-width: 320px;
+  z-index: 1002;
+  background: var(--bg-secondary);
+  transform: translateX(-100%);
+  transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.sidebar-mobile-drawer.open {
+  transform: translateX(0);
+  box-shadow: 10px 0 30px rgba(0,0,0,0.5);
+}
+
+/* Mobile Tab Bar */
+.mobile-tab-bar {
+  display: none;
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 60px;
+  background: var(--bg-glass);
+  backdrop-filter: blur(20px);
+  border-top: 1px solid var(--border);
+  z-index: 1000;
+  padding: 0 16px;
+  align-items: center;
+  justify-content: space-around;
+}
+
+.mobile-tab-bar button {
+  flex: 1;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  background: transparent;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  font-size: 0.7rem;
+  font-family: inherit;
+  transition: var(--transition);
+}
+
+.mobile-tab-bar button.active {
+  color: var(--accent-light);
+}
+
+.mobile-tab-bar button svg {
+  width: 24px;
+  height: 24px;
+}
+
+/* Mobile Breakpoint */
+@media (max-width: 768px) {
+  /* Show mobile elements */
+  .mobile-nav,
+  .mobile-tab-bar {
+    display: flex;
+  }
+
+  .drawer-overlay {
+    display: block;
+    pointer-events: none;
+  }
+
+  .drawer-overlay.open {
+    pointer-events: auto;
+  }
+
+  /* Layout Adjustment */
+  .app-container {
+    grid-template-columns: 1fr;
+    /* Use variables or safe values */
+    padding-top: 56px; 
+    padding-bottom: 60px;
+    height: 100dvh;
+  }
+
+  .sidebar {
+    /* Mobile drawer mode */
+    display: block;
+    position: fixed;
+    top: 56px;
+    left: 0;
+    bottom: 60px;
+    width: 85%;
+    max-width: 320px;
+    z-index: 1002;
+    background: var(--bg-secondary);
+    transform: translateX(-100%);
+    transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    overflow-y: auto;
+    padding: 24px;
+    box-shadow: none;
+  }
+  
+  .sidebar.drawer-open {
+    transform: translateX(0);
+    box-shadow: 10px 0 30px rgba(0,0,0,0.5);
+  }
+
+  /* Player area - Fixed overlap */
+  .player-area {
+    /* Exact height calculation using dvh */
+    height: calc(100dvh - 56px - 60px);
+    width: 100%;
+    position: relative;
+    z-index: 1;
+  }
+  
+  /* Ensure video container stays within player area */
+  .player-area .video-container {
+    height: 100%;
+    width: 100%;
+  }
+
+  /* Library adjustments */
+  .library-container {
+    padding: 16px !important;
+  }
+
+  .sticky-toolbar-mobile {
+    left: 0 !important;
+    padding: 8px 12px !important;
+  }
+
+  /* Buttons & Inputs Touch optimization */
+  .btn, input, select, textarea, .tab-btn {
+    min-height: 44px;
+  }
+  
+  .btn {
+    padding: 12px 16px;
+  }
+  
+  input, select, textarea {
+    padding: 12px 14px;
+    font-size: 16px;
+  }
+
+  .stream-card {
+    padding: 14px;
+  }
+
+  .group-header-btn {
+    min-height: 48px;
+  }
+
+  /* Responsive Flex Grids */
+  .library-header-mobile {
+    flex-direction: column !important;
+    align-items: stretch !important;
+    gap: 12px !important;
+  }
+
+  .library-header-mobile > div:first-child {
+    text-align: center;
+  }
+
+  .library-header-mobile > div:last-child {
+    justify-content: center !important;
+    flex-wrap: wrap;
+  }
+  
+  .library-action-btn {
+    padding: 8px 10px !important;
+    font-size: 0.75rem !important;
+    gap: 4px !important;
+  }
+  
+  .library-action-btn .btn-text {
+    display: none;
+  }
+  
+  .library-action-btn .btn-icon {
+    display: inline-block;
+    font-size: 1rem;
+  }
+
+  .library-toolbar-mobile {
+    flex-direction: column !important;
+    align-items: stretch !important;
+    gap: 10px !important;
+  }
+
+  .library-toolbar-mobile > div {
+    justify-content: space-between;
+  }
+
+  .stream-grid-mobile {
+    grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)) !important;
+    gap: 10px !important;
+  }
+
+  .list-item-mobile {
+    flex-wrap: wrap;
+    gap: 8px !important;
+  }
+
+  .list-item-mobile > .list-actions {
+    width: 100%;
+    justify-content: flex-end;
+  }
+}
+
+/* Small mobile */
+@media (max-width: 375px) {
+  .mobile-nav {
+    padding: 0 12px;
+  }
+  .library-container {
+    padding: 12px !important;
+  }
+  .stream-grid-mobile {
+    grid-template-columns: 1fr !important;
+  }
+  .library-action-btn {
+    padding: 6px 8px !important;
+  }
+  .sticky-toolbar-mobile {
+    flex-wrap: wrap !important;
+    gap: 6px !important;
+  }
+}
+
+/* Medium mobile */
+@media (min-width: 376px) and (max-width: 480px) {
+  .library-action-btn .btn-text {
+    display: none;
+  }
+  .library-action-btn .btn-icon {
+    display: inline-block;
+    font-size: 1rem;
+  }
+}
+
+/* Larger mobile */
+@media (min-width: 481px) and (max-width: 768px) {
+  .library-action-btn .btn-text {
+    display: inline;
+  }
+  .library-action-btn .btn-icon {
+    display: inline-block;
+    margin-right: 4px;
+  }
+}
+
+/* Landscape */
+@media (max-width: 768px) and (orientation: landscape) {
+  .mobile-nav {
+    height: 48px;
+  }
+  .mobile-tab-bar {
+    height: 48px;
+  }
+  .app-container {
+    padding-top: 48px;
+    padding-bottom: 48px;
+  }
+  .player-area {
+    height: calc(100dvh - 48px - 48px);
+  }
+}
+
+/* Safe Area Insets */
+@supports (padding: max(0px)) {
+  .mobile-nav {
+    padding-top: max(0px, env(safe-area-inset-top));
+    height: calc(56px + max(0px, env(safe-area-inset-top)));
+  }
+
+  .mobile-tab-bar {
+    padding-bottom: max(0px, env(safe-area-inset-bottom));
+    height: calc(60px + max(0px, env(safe-area-inset-bottom)));
+  }
+
+  @media (max-width: 768px) {
+    .app-container {
+      padding-top: calc(56px + max(0px, env(safe-area-inset-top)));
+      padding-bottom: calc(60px + max(0px, env(safe-area-inset-bottom)));
+    }
+    
+    .player-area {
+       /* Recalculate based on safe areas to prevent overlap */
+       height: calc(100dvh - (56px + max(0px, env(safe-area-inset-top))) - (60px + max(0px, env(safe-area-inset-bottom))));
+    }
+  }
 }

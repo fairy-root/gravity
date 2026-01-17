@@ -3,6 +3,8 @@ import Player from './components/Player';
 import StreamConfig from './components/StreamConfig';
 import Library from './components/Library';
 import ConfirmModal from './components/ConfirmModal';
+import MobileNav from './components/MobileNav';
+import MobileTabBar from './components/MobileTabBar';
 import { parseM3U } from './utils/m3uParser';
 
 // Helper to load from localStorage
@@ -44,6 +46,7 @@ function App() {
   const [prefs, setPrefs] = useState(loadPrefsFromStorage);
   const [searchQuery, setSearchQuery] = useState('');
   const [confirmModal, setConfirmModal] = useState({ isOpen: false, title: '', message: '', onConfirm: null });
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const isFirstRender = useRef(true);
 
   const [formConfig, setFormConfig] = useState({
@@ -202,12 +205,25 @@ function App() {
 
   return (
     <div className="app-container">
-      {/* Sidebar */}
-      <aside className="sidebar">
+      {/* Mobile Navigation */}
+      <MobileNav
+        onMenuToggle={() => setMobileMenuOpen(!mobileMenuOpen)}
+        currentView={view}
+        drawerOpen={mobileMenuOpen}
+      />
+
+      {/* Mobile Drawer Overlay */}
+      <div
+        className={`drawer-overlay ${mobileMenuOpen ? 'open' : ''}`}
+        onClick={() => setMobileMenuOpen(false)}
+      />
+
+      {/* Sidebar (desktop) / Drawer (mobile) */}
+      <aside className={`sidebar ${mobileMenuOpen ? 'drawer-open' : ''}`}>
         <div style={{ marginBottom: '24px' }}>
           <h1
             style={{ cursor: 'pointer', marginBottom: '4px' }}
-            onClick={() => setView('library')}
+            onClick={() => { setView('library'); setMobileMenuOpen(false); }}
           >
             Gravity
           </h1>
@@ -217,14 +233,14 @@ function App() {
         <div className="tab-group" style={{ marginBottom: '24px' }}>
           <button
             type="button"
-            onClick={() => setView('library')}
+            onClick={() => { setView('library'); setMobileMenuOpen(false); }}
             className={`tab-btn ${view === 'library' ? 'active' : ''}`}
           >
             Library
           </button>
           <button
             type="button"
-            onClick={() => setView('player')}
+            onClick={() => { setView('player'); setMobileMenuOpen(false); }}
             className={`tab-btn ${view === 'player' ? 'active' : ''}`}
           >
             Player {activeConfig && '●'}
@@ -234,9 +250,9 @@ function App() {
         <StreamConfig
           config={formConfig}
           onConfigChange={setFormConfig}
-          onSubmit={handlePlay}
-          onSaveToLibrary={handleSaveToLibrary}
-          onImportM3U={handleImportM3U}
+          onSubmit={(e) => { handlePlay(e); setMobileMenuOpen(false); }}
+          onSaveToLibrary={() => { handleSaveToLibrary(); setMobileMenuOpen(false); }}
+          onImportM3U={(content) => { handleImportM3U(content); setMobileMenuOpen(false); }}
           isEditing={!!editingId}
           onCancelEdit={handleCancelEdit}
         />
@@ -317,6 +333,12 @@ function App() {
         message={confirmModal.message}
         onConfirm={confirmModal.onConfirm}
         onCancel={() => setConfirmModal({ isOpen: false })}
+      />
+
+      {/* Mobile Bottom Tab Bar */}
+      <MobileTabBar
+        currentView={view}
+        onViewChange={(newView) => { setView(newView); setMobileMenuOpen(false); }}
       />
     </div>
   );

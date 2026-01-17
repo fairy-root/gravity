@@ -88,6 +88,7 @@ const Library = ({
     return (
         <div
             ref={containerRef}
+            className="library-container"
             style={{
                 padding: '32px 40px',
                 width: '100%',
@@ -100,6 +101,7 @@ const Library = ({
             {/* Sticky Toolbar (appears on scroll) */}
             {stickyGroup && (
                 <div
+                    className="sticky-toolbar-mobile"
                     style={{
                         position: 'fixed',
                         top: 0,
@@ -190,24 +192,24 @@ const Library = ({
                     {/* Action Buttons */}
                     <button
                         onClick={onToggleAll}
-                        className="btn btn-secondary"
-                        style={{ padding: '6px 10px', fontSize: '0.75rem' }}
+                        className="btn btn-secondary library-action-btn"
                     >
-                        {allCollapsed ? 'Expand' : 'Collapse'}
+                        <span className="btn-icon">{allCollapsed ? '▼' : '▲'}</span>
+                        <span className="btn-text">{allCollapsed ? 'Expand' : 'Collapse'}</span>
                     </button>
                     <button
                         onClick={handleExportM3U}
-                        className="btn btn-secondary"
-                        style={{ padding: '6px 10px', fontSize: '0.75rem' }}
+                        className="btn btn-secondary library-action-btn"
                     >
-                        ⬇ Export
+                        <span className="btn-icon">⬇</span>
+                        <span className="btn-text">Export</span>
                     </button>
                     <button
                         onClick={onClearAll}
-                        className="btn btn-danger"
-                        style={{ padding: '6px 10px', fontSize: '0.75rem' }}
+                        className="btn btn-danger library-action-btn"
                     >
-                        Clear All
+                        <span className="btn-icon">✕</span>
+                        <span className="btn-text">Clear All</span>
                     </button>
                 </div>
             )}
@@ -228,28 +230,32 @@ const Library = ({
                             {searchQuery ? `${filteredCount} results` : `${totalCount} streams in ${sortedGroups.length} groups`}
                         </p>
                     </div>
-                    <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                    <div style={{ display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap' }}>
                         {displayGroups.length > 0 && (
                             <button
                                 onClick={onToggleAll}
-                                className="btn btn-secondary"
-                                style={{ padding: '8px 12px', fontSize: '0.8rem' }}
+                                className="btn btn-secondary library-action-btn"
                             >
-                                {allCollapsed ? 'Expand All' : 'Collapse All'}
+                                <span className="btn-icon">{allCollapsed ? '▼' : '▲'}</span>
+                                <span className="btn-text">{allCollapsed ? 'Expand All' : 'Collapse All'}</span>
                             </button>
                         )}
                         {totalCount > 0 && (
                             <>
                                 <button
                                     onClick={handleExportM3U}
-                                    className="btn btn-secondary"
-                                    style={{ padding: '8px 12px', fontSize: '0.8rem' }}
+                                    className="btn btn-secondary library-action-btn"
                                     title="Export library to M3U file"
                                 >
-                                    ⬇ Export
+                                    <span className="btn-icon">⬇</span>
+                                    <span className="btn-text">Export</span>
                                 </button>
-                                <button onClick={onClearAll} className="btn btn-danger" style={{ padding: '8px 12px', fontSize: '0.8rem' }}>
-                                    Clear All
+                                <button
+                                    onClick={onClearAll}
+                                    className="btn btn-danger library-action-btn"
+                                >
+                                    <span className="btn-icon">✕</span>
+                                    <span className="btn-text">Clear All</span>
                                 </button>
                             </>
                         )}
