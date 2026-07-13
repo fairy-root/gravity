@@ -2,6 +2,26 @@
 
 A dark-themed browser app for playing DASH/HLS network streams with DRM support. Built with **React**, **Vite**, and **Shaka Player**.
 
+## Screenshots
+
+### Desktop
+
+Library view with sidebar stream form (single stream / M3U import), search, and grid controls.
+
+![Gravity desktop — library and sidebar](docs/screenshots/desktop.png)
+
+### Mobile
+
+Responsive library with bottom navigation between Library and Player.
+
+![Gravity mobile — library](docs/screenshots/mobile.png)
+
+### Mobile drawer
+
+Hamburger menu opens the configuration drawer (Library / Player, stream form).
+
+![Gravity mobile — config drawer](docs/screenshots/mobile-drawer.png)
+
 ## Features
 
 ### Playback
