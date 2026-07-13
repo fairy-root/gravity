@@ -1,0 +1,8 @@
+[build]
+  command = "npm run build"
+  publish = "dist"
+
+# Stream proxy — bypasses CDN Origin blocks (403 from netlify.app / custom domains)
+[[edge_functions]]
+  function = "stream-proxy"
+  path = "/api/proxy/*"

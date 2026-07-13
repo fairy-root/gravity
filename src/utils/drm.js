@@ -86,11 +86,17 @@ export const formatShakaError = (error) => {
 
   // NETWORK.BAD_HTTP_STATUS = 1001
   if (code === 1001) {
-    detail = `HTTP ${status ?? 'error'} loading stream`;
+    if (status === 403) {
+      detail =
+        'HTTP 403 — stream CDN blocked this site’s origin. Redeploy with the Netlify stream proxy, or play from localhost.';
+    } else {
+      detail = `HTTP ${status ?? 'error'} loading stream`;
+    }
     if (uri) {
       try {
-        const short = new URL(uri).pathname.split('/').slice(-2).join('/');
-        detail += ` (${short || uri})`;
+        const path = new URL(uri, 'http://local').pathname;
+        const short = path.split('/').filter(Boolean).slice(-2).join('/');
+        detail += ` (${short || path})`;
       } catch {
         detail += ` (${uri.slice(0, 80)})`;
       }

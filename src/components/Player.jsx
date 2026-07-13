@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState, useCallback } from 'react';
 import shaka from 'shaka-player/dist/shaka-player.ui';
 import 'shaka-player/dist/controls.css';
 import { buildDrmConfig, formatShakaError } from '../utils/drm';
+import { wrapStreamUrl, shouldUseStreamProxy } from '../utils/streamProxy';
 import {
   registerAspectRatioControl,
   applyAspectRatio,
@@ -61,10 +62,15 @@ const Player = ({
     }
 
     const filter = (_type, request) => {
+      // Route CDN traffic through same-origin proxy when hosted (avoids Origin 403)
+      if (request.uris && request.uris.length) {
+        request.uris = request.uris.map((u) => wrapStreamUrl(u));
+      }
+
       const h = headersRef.current || {};
-      // Do NOT set User-Agent — forbidden in browsers and can break CORS preflight
-      // on CDNs with narrow Access-Control-Allow-Headers (e.g. edgenextcdn).
-      if (h.referrer) {
+      // Do NOT set User-Agent — forbidden in browsers and can break CORS preflight.
+      // Only set Referer when not using the proxy (proxy strips Origin/Referer upstream).
+      if (h.referrer && !shouldUseStreamProxy()) {
         request.headers['Referer'] = h.referrer;
       }
       if (h.authorization) {
@@ -188,7 +194,8 @@ const Player = ({
 
         if (!mountedRef.current || gen !== loadGenRef.current) return;
 
-        await player.load(manifestUrl);
+        // wrapStreamUrl also applied in networking filter for segments
+        await player.load(wrapStreamUrl(manifestUrl));
 
         if (!mountedRef.current || gen !== loadGenRef.current) return;
 
@@ -230,80 +237,116 @@ const Player = ({
   // Create player once on mount
   useEffect(() => {
     mountedRef.current = true;
-    shaka.polyfill.installAll();
+    let cancelled = false;
+    let player = null;
+    let ui = null;
+    let onError = null;
 
-    if (!shaka.Player.isBrowserSupported()) {
-      setError({ message: 'Browser not supported for media playback', code: 0 });
-      return undefined;
-    }
+    const init = async () => {
+      shaka.polyfill.installAll();
 
-    const video = videoRef.current;
-    const container = containerRef.current;
-    if (!video || !container) return undefined;
+      if (!shaka.Player.isBrowserSupported()) {
+        setError({ message: 'Browser not supported for media playback', code: 0 });
+        return;
+      }
 
-    // Register custom controls before creating the Overlay
-    registerAspectRatioControl(shaka);
+      const video = videoRef.current;
+      const container = containerRef.current;
+      if (!video || !container) return;
 
-    const player = new shaka.Player(video);
-    const ui = new shaka.ui.Overlay(player, container, video);
+      // Register custom controls before creating the Overlay
+      registerAspectRatioControl(shaka);
 
-    ui.configure({
-      controlPanelElements: [
-        'play_pause',
-        'time_and_duration',
-        'spacer',
-        'mute',
-        'volume',
-        'aspect_ratio',
-        'fullscreen',
-        'overflow_menu',
-      ],
-      overflowMenuButtons: ['quality', 'language', 'playback_rate', 'captions'],
-      doubleClickForFullscreen: true,
-      enableFullscreenOnRotation: true,
-      enableTooltips: true,
-      seekBarColors: {
-        base: 'rgba(255,255,255,0.25)',
-        buffered: 'rgba(255,255,255,0.45)',
-        played: 'rgb(139, 92, 246)',
-      },
-    });
+      // Shaka v5: construct without mediaElement, then attach
+      player = new shaka.Player();
+      try {
+        await player.attach(video);
+      } catch (e) {
+        console.error('[Gravity] player.attach failed:', e);
+        setError(e);
+        return;
+      }
 
-    // Restore preferred aspect ratio on the container
-    applyAspectRatio(container, getStoredAspectRatio());
+      if (cancelled) {
+        try {
+          await player.destroy();
+        } catch {
+          /* ignore */
+        }
+        return;
+      }
 
-    playerRef.current = player;
-    uiRef.current = ui;
-    applyNetworkingFilter(player);
+      ui = new shaka.ui.Overlay(player, container, video);
 
-    const onError = (event) => {
-      const detail = event?.detail || event;
-      console.error('[Gravity] Shaka error:', detail);
-      if (!mountedRef.current) return;
-      // Ignore errors from a superseded load
-      setError(detail);
-      setLoading(false);
-      setStatusText('');
+      ui.configure({
+        controlPanelElements: [
+          'play_pause',
+          'time_and_duration',
+          'spacer',
+          'mute',
+          'volume',
+          'aspect_ratio',
+          'fullscreen',
+          'overflow_menu',
+        ],
+        overflowMenuButtons: ['quality', 'language', 'playback_rate', 'captions'],
+        doubleClickForFullscreen: true,
+        enableFullscreenOnRotation: true,
+        enableTooltips: true,
+        seekBarColors: {
+          base: 'rgba(255,255,255,0.25)',
+          buffered: 'rgba(255,255,255,0.45)',
+          played: 'rgb(139, 92, 246)',
+        },
+      });
+
+      // Restore preferred aspect ratio on the container
+      applyAspectRatio(container, getStoredAspectRatio());
+
+      playerRef.current = player;
+      uiRef.current = ui;
+      applyNetworkingFilter(player);
+
+      onError = (event) => {
+        const detail = event?.detail || event;
+        console.error('[Gravity] Shaka error:', detail);
+        if (!mountedRef.current) return;
+        setError(detail);
+        setLoading(false);
+        setStatusText('');
+      };
+      player.addEventListener('error', onError);
+
+      // Mid-stream buffering: Shaka built-in spinner only
+
+      if (shouldUseStreamProxy()) {
+        console.info('[Gravity] Stream proxy enabled (hosted origin)');
+      }
+
+      setPlayerReady(true);
     };
-    player.addEventListener('error', onError);
 
-    // Mid-stream buffering is handled by Shaka's built-in spinner only.
-    // Do not drive a second overlay from the 'buffering' event.
-
-    setPlayerReady(true);
+    init();
 
     return () => {
+      cancelled = true;
       mountedRef.current = false;
       loadGenRef.current += 1;
       setPlayerReady(false);
-      player.removeEventListener('error', onError);
+      if (player && onError) {
+        try {
+          player.removeEventListener('error', onError);
+        } catch {
+          /* ignore */
+        }
+      }
       try {
-        ui.destroy();
+        ui?.destroy();
       } catch {
         /* ignore */
       }
       try {
-        player.destroy();
+        player?.destroy();
       } catch {
         /* ignore */
       }

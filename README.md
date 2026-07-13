@@ -102,14 +102,28 @@ src/
 
 ## Hosting
 
-Gravity is a static site. After `npm run build`, deploy the `dist/` folder to Netlify, Vercel, Cloudflare Pages, GitHub Pages, etc.
+### Netlify (recommended)
+
+This repo includes `netlify.toml` and an **edge stream proxy**. Some CDNs return **HTTP 403** when the browser sends `Origin: https://your-site.netlify.app` (while `localhost` still works). The proxy loads manifests/segments from Netlify’s edge so the CDN never sees that Origin.
 
 | Setting            | Value            |
 |--------------------|------------------|
 | Build command      | `npm run build`  |
 | Publish directory  | `dist`           |
 
-For GitHub Pages, set Vite `base` to your repo path in `vite.config.js`.
+Deploy by connecting the GitHub repo to Netlify (or `netlify deploy --prod`). Ensure edge functions are enabled (default on Netlify).
+
+**How the proxy works**
+
+- Hosted builds rewrite stream URLs to `/api/proxy/https/cdn-host/path...`
+- Localhost does **not** use the proxy (CDN usually allows it; saves bandwidth)
+- Force proxy in dev: set `VITE_FORCE_PROXY=true`
+
+**Note:** Live video bandwidth flows through Netlify’s edge. Free-tier limits may apply on heavy use.
+
+### Other hosts (Vercel, Cloudflare, etc.)
+
+You need an equivalent reverse proxy for blocked Origins; a static-only deploy will keep getting 403 from those CDNs. For GitHub Pages, set Vite `base` to your repo path in `vite.config.js` (proxy not available there).
 
 ## Compatibility notes
 
@@ -120,7 +134,7 @@ For GitHub Pages, set Vite `base` to your repo path in `vite.config.js`.
 | Widevine           | ⚠️     | Needs HTTPS + license server               |
 | PlayReady          | ⚠️     | Limited browser support                    |
 | Custom headers     | ⚠️     | Some headers forbidden by the browser      |
-| Cross-origin streams | ⚠️   | Stream CDN must send proper CORS headers   |
+| Cross-origin streams | ⚠️   | Use Netlify proxy when CDN blocks Origin   |
 
 ## License
 
