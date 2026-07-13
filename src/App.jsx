@@ -3,8 +3,6 @@ import Player from './components/Player';
 import StreamConfig from './components/StreamConfig';
 import Library from './components/Library';
 import ConfirmModal from './components/ConfirmModal';
-import MobileNav from './components/MobileNav';
-import MobileTabBar from './components/MobileTabBar';
 import { parseM3U } from './utils/m3uParser';
 
 // Helper to load from localStorage
@@ -46,7 +44,6 @@ function App() {
   const [prefs, setPrefs] = useState(loadPrefsFromStorage);
   const [searchQuery, setSearchQuery] = useState('');
   const [confirmModal, setConfirmModal] = useState({ isOpen: false, title: '', message: '', onConfirm: null });
-  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const isFirstRender = useRef(true);
 
   const [formConfig, setFormConfig] = useState({
@@ -169,6 +166,38 @@ function App() {
     });
   };
 
+  const handleDeleteGroup = (groupName) => {
+    const groupItems = library.filter((item) => (item.group || 'Uncategorized') === groupName);
+    const count = groupItems.length;
+    setConfirmModal({
+      isOpen: true,
+      title: 'Delete Group',
+      message: `Are you sure you want to delete the group "${groupName}" and all ${count} channel${count === 1 ? '' : 's'} in it? This action cannot be undone.`,
+      onConfirm: () => {
+        const groupIds = new Set(groupItems.map((item) => item.id));
+        setLibrary((prev) =>
+          prev.filter((item) => (item.group || 'Uncategorized') !== groupName)
+        );
+        if (editingId && groupIds.has(editingId)) {
+          setEditingId(null);
+        }
+        setCollapsedGroups((prev) => {
+          const next = { ...prev };
+          delete next[groupName];
+          return next;
+        });
+        // Stop playback if the active channel belonged to this group
+        setActiveConfig((current) => {
+          if (!current) return current;
+          if (current.id && groupIds.has(current.id)) return null;
+          const currentGroup = current.group || 'Uncategorized';
+          return currentGroup === groupName ? null : current;
+        });
+        setConfirmModal({ isOpen: false });
+      },
+    });
+  };
+
   const handleClearAll = () => {
     setConfirmModal({
       isOpen: true,
@@ -177,6 +206,7 @@ function App() {
       onConfirm: () => {
         setLibrary([]);
         setEditingId(null);
+        setActiveConfig(null);
         setConfirmModal({ isOpen: false });
       }
     });
@@ -205,25 +235,12 @@ function App() {
 
   return (
     <div className="app-container">
-      {/* Mobile Navigation */}
-      <MobileNav
-        onMenuToggle={() => setMobileMenuOpen(!mobileMenuOpen)}
-        currentView={view}
-        drawerOpen={mobileMenuOpen}
-      />
-
-      {/* Mobile Drawer Overlay */}
-      <div
-        className={`drawer-overlay ${mobileMenuOpen ? 'open' : ''}`}
-        onClick={() => setMobileMenuOpen(false)}
-      />
-
-      {/* Sidebar (desktop) / Drawer (mobile) */}
-      <aside className={`sidebar ${mobileMenuOpen ? 'drawer-open' : ''}`}>
+      {/* Sidebar */}
+      <aside className="sidebar">
         <div style={{ marginBottom: '24px' }}>
           <h1
             style={{ cursor: 'pointer', marginBottom: '4px' }}
-            onClick={() => { setView('library'); setMobileMenuOpen(false); }}
+            onClick={() => setView('library')}
           >
             Gravity
           </h1>
@@ -233,14 +250,14 @@ function App() {
         <div className="tab-group" style={{ marginBottom: '24px' }}>
           <button
             type="button"
-            onClick={() => { setView('library'); setMobileMenuOpen(false); }}
+            onClick={() => setView('library')}
             className={`tab-btn ${view === 'library' ? 'active' : ''}`}
           >
             Library
           </button>
           <button
             type="button"
-            onClick={() => { setView('player'); setMobileMenuOpen(false); }}
+            onClick={() => setView('player')}
             className={`tab-btn ${view === 'player' ? 'active' : ''}`}
           >
             Player {activeConfig && '●'}
@@ -250,9 +267,9 @@ function App() {
         <StreamConfig
           config={formConfig}
           onConfigChange={setFormConfig}
-          onSubmit={(e) => { handlePlay(e); setMobileMenuOpen(false); }}
-          onSaveToLibrary={() => { handleSaveToLibrary(); setMobileMenuOpen(false); }}
-          onImportM3U={(content) => { handleImportM3U(content); setMobileMenuOpen(false); }}
+          onSubmit={handlePlay}
+          onSaveToLibrary={handleSaveToLibrary}
+          onImportM3U={handleImportM3U}
           isEditing={!!editingId}
           onCancelEdit={handleCancelEdit}
         />
@@ -276,6 +293,8 @@ function App() {
               userAgent={activeConfig.userAgent}
               referrer={activeConfig.referrer}
               authorization={activeConfig.authorization}
+              headers={activeConfig.headers}
+              channelName={activeConfig.name}
               autoPlay={true}
             />
           ) : (
@@ -316,6 +335,7 @@ function App() {
             onPlay={handlePlayFromLibrary}
             onEdit={handleEdit}
             onDelete={handleDelete}
+            onDeleteGroup={handleDeleteGroup}
             onClearAll={handleClearAll}
             totalCount={library.length}
             searchQuery={searchQuery}
@@ -333,12 +353,6 @@ function App() {
         message={confirmModal.message}
         onConfirm={confirmModal.onConfirm}
         onCancel={() => setConfirmModal({ isOpen: false })}
-      />
-
-      {/* Mobile Bottom Tab Bar */}
-      <MobileTabBar
-        currentView={view}
-        onViewChange={(newView) => { setView(newView); setMobileMenuOpen(false); }}
       />
     </div>
   );

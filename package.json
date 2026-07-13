@@ -1,7 +1,8 @@
 {
   "name": "gravity",
   "private": true,
-  "version": "0.0.0",
+  "version": "1.3.0",
+  "description": "Browser network stream player with DASH/HLS and ClearKey DRM",
   "type": "module",
   "scripts": {
     "dev": "vite",

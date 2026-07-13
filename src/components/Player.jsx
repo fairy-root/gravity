@@ -1,147 +1,450 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useRef, useState, useCallback } from 'react';
 import shaka from 'shaka-player/dist/shaka-player.ui';
 import 'shaka-player/dist/controls.css';
+import { buildDrmConfig, formatShakaError } from '../utils/drm';
+import {
+  registerAspectRatioControl,
+  applyAspectRatio,
+  getStoredAspectRatio,
+} from './aspectRatioControl';
 
-const Player = ({ manifestUrl, drmScheme, clearKeys, licenseUrl, userAgent, referrer, authorization, autoPlay = false }) => {
-    const videoRef = useRef(null);
-    const containerRef = useRef(null);
-    const playerRef = useRef(null);
-    const uiRef = useRef(null);
-    const [error, setError] = useState(null);
+/**
+ * Gravity stream player.
+ *
+ * Architecture:
+ *  - One long-lived Shaka Player + UI (created on mount)
+ *  - Channel switches use unload → reconfigure → load (no destroy races)
+ *  - Generation counter ignores stale async results
+ *  - Live DASH/HLS tuned (duration-based live like MBC3 + SegmentTimeline like MBC2)
+ *  - CMCD off by default (strict CDN CORS on hosts like edgenextcdn)
+ */
+const Player = ({
+  manifestUrl,
+  drmScheme,
+  clearKeys,
+  licenseUrl,
+  userAgent,
+  referrer,
+  authorization,
+  headers,
+  autoPlay = false,
+  channelName = '',
+}) => {
+  const videoRef = useRef(null);
+  const containerRef = useRef(null);
+  const playerRef = useRef(null);
+  const uiRef = useRef(null);
+  const filterRef = useRef(null);
+  const loadGenRef = useRef(0);
+  const mountedRef = useRef(true);
 
-    useEffect(() => {
-        const initPlayer = async () => {
-            if (!videoRef.current || !containerRef.current) return;
+  const [playerReady, setPlayerReady] = useState(false);
+  const [error, setError] = useState(null);
+  const [loading, setLoading] = useState(false);
+  const [statusText, setStatusText] = useState('');
 
-            if (playerRef.current) {
-                await playerRef.current.destroy();
-                playerRef.current = null;
-            }
-            if (uiRef.current) {
-                uiRef.current.destroy();
-                uiRef.current = null;
-            }
+  // Latest headers for the networking filter (no re-register on every change)
+  const headersRef = useRef({ userAgent, referrer, authorization, headers });
+  headersRef.current = { userAgent, referrer, authorization, headers };
 
-            const player = new shaka.Player(videoRef.current);
-            const ui = new shaka.ui.Overlay(player, containerRef.current, videoRef.current);
+  const applyNetworkingFilter = useCallback((player) => {
+    const engine = player.getNetworkingEngine();
+    if (!engine) return;
 
-            // Configure UI for proper fullscreen
-            const uiConfig = {
-                'controlPanelElements': ['play_pause', 'time_and_duration', 'spacer', 'mute', 'volume', 'fullscreen', 'overflow_menu'],
-                'overflowMenuButtons': ['quality', 'playback_rate', 'captions'],
-                'doubleClickForFullscreen': true,
-                'enableFullscreenOnRotation': true,
-            };
-            ui.configure(uiConfig);
+    if (filterRef.current) {
+      try {
+        engine.unregisterRequestFilter(filterRef.current);
+      } catch {
+        /* ignore */
+      }
+      filterRef.current = null;
+    }
 
-            playerRef.current = player;
-            uiRef.current = ui;
-
-            player.addEventListener('error', (event) => {
-                console.error('Shaka Error:', event.detail);
-                setError(event.detail);
-            });
-
-            player.getNetworkingEngine().registerRequestFilter((type, request) => {
-                if (userAgent) {
-                    request.headers['User-Agent'] = userAgent;
-                }
-                if (referrer) {
-                    request.headers['Referer'] = referrer;
-                }
-                if (authorization) {
-                    request.headers['Authorization'] = authorization;
-                }
-            });
-
-            const config = {
-                drm: {
-                    servers: {},
-                    clearKeys: {}
-                }
-            };
-
-            if (drmScheme === 'clearkey' && clearKeys) {
-                config.drm.clearKeys = {};
-                const parts = clearKeys.split(',');
-                parts.forEach(part => {
-                    const [kId, k] = part.trim().split(':');
-                    if (kId && k) {
-                        config.drm.clearKeys[kId] = k;
-                    }
-                });
-            } else if (drmScheme === 'widevine' && licenseUrl) {
-                config.drm.servers['com.widevine.alpha'] = licenseUrl;
-            } else if (drmScheme === 'playready' && licenseUrl) {
-                config.drm.servers['com.microsoft.playready'] = licenseUrl;
-            }
-
-            player.configure(config);
-
-            if (manifestUrl) {
-                try {
-                    await player.load(manifestUrl);
-                    if (autoPlay) {
-                        videoRef.current.play();
-                    }
-                    setError(null);
-                } catch (e) {
-                    console.error('Load Error:', e);
-                    setError(e);
-                }
-            }
-        };
-
-        const timer = setTimeout(initPlayer, 100);
-
-        return () => {
-            clearTimeout(timer);
-            if (uiRef.current) {
-                uiRef.current.destroy();
-            }
-            if (playerRef.current) {
-                playerRef.current.destroy();
-            }
-        };
-    }, [manifestUrl, drmScheme, clearKeys, licenseUrl, userAgent, referrer, authorization]);
-
-    // Handle double-click for native fullscreen
-    const handleDoubleClick = () => {
-        const container = containerRef.current;
-        if (!container) return;
-
-        if (document.fullscreenElement) {
-            document.exitFullscreen();
-        } else {
-            container.requestFullscreen().catch(err => {
-                console.error('Fullscreen error:', err);
-            });
-        }
+    const filter = (_type, request) => {
+      const h = headersRef.current || {};
+      // Do NOT set User-Agent — forbidden in browsers and can break CORS preflight
+      // on CDNs with narrow Access-Control-Allow-Headers (e.g. edgenextcdn).
+      if (h.referrer) {
+        request.headers['Referer'] = h.referrer;
+      }
+      if (h.authorization) {
+        request.headers['Authorization'] = h.authorization;
+      }
+      if (h.headers && typeof h.headers === 'object') {
+        Object.entries(h.headers).forEach(([k, v]) => {
+          if (k && v != null && !/^user-agent$/i.test(k)) {
+            request.headers[k] = String(v);
+          }
+        });
+      }
     };
 
-    return (
+    engine.registerRequestFilter(filter);
+    filterRef.current = filter;
+  }, []);
+
+  const buildPlayerConfig = useCallback((stream) => {
+    const drm = buildDrmConfig(stream);
+
+    return {
+      drm,
+      cmcd: {
+        enabled: false,
+      },
+      manifest: {
+        retryParameters: {
+          maxAttempts: 4,
+          baseDelay: 400,
+          backoffFactor: 2,
+          timeout: 30000,
+          stallTimeout: 10000,
+          connectionTimeout: 15000,
+        },
+        dash: {
+          clockSyncUri: '',
+          ignoreMinBufferTime: true,
+          autoCorrectDrift: true,
+          ignoreSuggestedPresentationDelay: true,
+          ignoreEmptyAdaptationSet: true,
+          // Helps live MPDs that use $Number$ + duration without SegmentTimeline
+          initialSegmentLimit: 1000,
+        },
+        hls: {
+          ignoreTextStreamFailures: true,
+        },
+      },
+      streaming: {
+        retryParameters: {
+          maxAttempts: 5,
+          baseDelay: 300,
+          backoffFactor: 2,
+          timeout: 30000,
+          stallTimeout: 10000,
+          connectionTimeout: 15000,
+        },
+        bufferingGoal: 20,
+        rebufferingGoal: 2,
+        bufferBehind: 30,
+        inaccurateManifestTolerance: 2,
+        segmentPrefetchLimit: 2,
+        failureCallback: (err) => {
+          console.warn('[Gravity] Streaming failure, retrying:', err?.code, err?.message);
+          const player = playerRef.current;
+          if (!player) return;
+          try {
+            player.retryStreaming(0.5);
+          } catch (e) {
+            console.warn('[Gravity] retryStreaming failed:', e);
+          }
+        },
+      },
+    };
+  }, []);
+
+  const seekLiveIfNeeded = useCallback(async (player, video) => {
+    try {
+      if (player.isLive()) {
+        const seekRange = player.seekRange();
+        if (seekRange && Number.isFinite(seekRange.end)) {
+          // Small cushion so the edge segment is already available
+          video.currentTime = Math.max(seekRange.start, seekRange.end - 3);
+        }
+      }
+    } catch (e) {
+      console.warn('[Gravity] live seek skipped:', e);
+    }
+  }, []);
+
+  const loadStream = useCallback(
+    async (gen) => {
+      const player = playerRef.current;
+      const video = videoRef.current;
+      if (!player || !video || !manifestUrl) return;
+
+      setLoading(true);
+      setError(null);
+      setStatusText(channelName ? `Loading ${channelName}…` : 'Loading…');
+
+      try {
+        try {
+          await player.unload();
+        } catch {
+          /* first load or already unloaded */
+        }
+
+        if (!mountedRef.current || gen !== loadGenRef.current) return;
+
+        applyNetworkingFilter(player);
+
+        // Replace DRM map fields cleanly before applying the new stream config
+        player.configure({
+          drm: {
+            servers: {},
+            clearKeys: {},
+            preferredKeySystems: [],
+          },
+        });
+        player.configure(buildPlayerConfig({ drmScheme, clearKeys, licenseUrl }));
+
+        if (!mountedRef.current || gen !== loadGenRef.current) return;
+
+        await player.load(manifestUrl);
+
+        if (!mountedRef.current || gen !== loadGenRef.current) return;
+
+        await seekLiveIfNeeded(player, video);
+
+        if (autoPlay) {
+          try {
+            await video.play();
+          } catch (playErr) {
+            console.warn('[Gravity] autoplay blocked:', playErr?.message || playErr);
+          }
+        }
+
+        if (!mountedRef.current || gen !== loadGenRef.current) return;
+        setError(null);
+        setLoading(false);
+        setStatusText('');
+      } catch (e) {
+        if (!mountedRef.current || gen !== loadGenRef.current) return;
+        console.error('[Gravity] Load failed:', e);
+        setError(e);
+        setLoading(false);
+        setStatusText('');
+      }
+    },
+    [
+      manifestUrl,
+      drmScheme,
+      clearKeys,
+      licenseUrl,
+      autoPlay,
+      channelName,
+      applyNetworkingFilter,
+      buildPlayerConfig,
+      seekLiveIfNeeded,
+    ]
+  );
+
+  // Create player once on mount
+  useEffect(() => {
+    mountedRef.current = true;
+    shaka.polyfill.installAll();
+
+    if (!shaka.Player.isBrowserSupported()) {
+      setError({ message: 'Browser not supported for media playback', code: 0 });
+      return undefined;
+    }
+
+    const video = videoRef.current;
+    const container = containerRef.current;
+    if (!video || !container) return undefined;
+
+    // Register custom controls before creating the Overlay
+    registerAspectRatioControl(shaka);
+
+    const player = new shaka.Player(video);
+    const ui = new shaka.ui.Overlay(player, container, video);
+
+    ui.configure({
+      controlPanelElements: [
+        'play_pause',
+        'time_and_duration',
+        'spacer',
+        'mute',
+        'volume',
+        'aspect_ratio',
+        'fullscreen',
+        'overflow_menu',
+      ],
+      overflowMenuButtons: ['quality', 'language', 'playback_rate', 'captions'],
+      doubleClickForFullscreen: true,
+      enableFullscreenOnRotation: true,
+      enableTooltips: true,
+      seekBarColors: {
+        base: 'rgba(255,255,255,0.25)',
+        buffered: 'rgba(255,255,255,0.45)',
+        played: 'rgb(139, 92, 246)',
+      },
+    });
+
+    // Restore preferred aspect ratio on the container
+    applyAspectRatio(container, getStoredAspectRatio());
+
+    playerRef.current = player;
+    uiRef.current = ui;
+    applyNetworkingFilter(player);
+
+    const onError = (event) => {
+      const detail = event?.detail || event;
+      console.error('[Gravity] Shaka error:', detail);
+      if (!mountedRef.current) return;
+      // Ignore errors from a superseded load
+      setError(detail);
+      setLoading(false);
+      setStatusText('');
+    };
+    player.addEventListener('error', onError);
+
+    // Mid-stream buffering is handled by Shaka's built-in spinner only.
+    // Do not drive a second overlay from the 'buffering' event.
+
+    setPlayerReady(true);
+
+    return () => {
+      mountedRef.current = false;
+      loadGenRef.current += 1;
+      setPlayerReady(false);
+      player.removeEventListener('error', onError);
+      try {
+        ui.destroy();
+      } catch {
+        /* ignore */
+      }
+      try {
+        player.destroy();
+      } catch {
+        /* ignore */
+      }
+      playerRef.current = null;
+      uiRef.current = null;
+      filterRef.current = null;
+    };
+  }, [applyNetworkingFilter]);
+
+  // Load / switch when stream config changes (after player is ready)
+  useEffect(() => {
+    if (!playerReady) return undefined;
+
+    if (!manifestUrl) {
+      setLoading(false);
+      setError(null);
+      setStatusText('');
+      playerRef.current?.unload().catch(() => {});
+      return undefined;
+    }
+
+    const gen = ++loadGenRef.current;
+    loadStream(gen);
+
+    return () => {
+      // Invalidate in-flight load when deps change
+      if (loadGenRef.current === gen) {
+        // only bump if we haven't already moved on
+      }
+      loadGenRef.current += 1;
+    };
+  }, [playerReady, manifestUrl, drmScheme, clearKeys, licenseUrl, userAgent, referrer, authorization, headers, autoPlay, channelName, loadStream]);
+
+  const handleRetry = () => {
+    if (!manifestUrl || !playerReady) return;
+    const gen = ++loadGenRef.current;
+    loadStream(gen);
+  };
+
+  const handleDoubleClick = () => {
+    const container = containerRef.current;
+    if (!container) return;
+    if (document.fullscreenElement) {
+      document.exitFullscreen().catch(() => {});
+    } else {
+      container.requestFullscreen().catch((err) => {
+        console.error('Fullscreen error:', err);
+      });
+    }
+  };
+
+  const errorMessage = error ? formatShakaError(error) : null;
+
+  return (
+    <div
+      className={`video-container${loading ? ' is-loading' : ''}`}
+      ref={containerRef}
+      onDoubleClick={handleDoubleClick}
+      style={{ width: '100%', height: '100%', background: '#000', position: 'relative' }}
+    >
+      {/* Initial channel load only — Shaka owns mid-stream buffering spinner */}
+      {loading && !error && (
         <div
-            className="video-container"
-            ref={containerRef}
-            onDoubleClick={handleDoubleClick}
-            style={{ width: '100%', height: '100%', background: '#000' }}
+          style={{
+            position: 'absolute',
+            inset: 0,
+            zIndex: 900,
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            justifyContent: 'center',
+            background: 'rgba(0,0,0,0.45)',
+            pointerEvents: 'none',
+            gap: 12,
+          }}
         >
-            {error && (
-                <div style={{
-                    position: 'absolute', top: 10, left: 10, right: 10, zIndex: 1000,
-                    background: 'rgba(255, 0, 0, 0.7)', padding: '10px', borderRadius: '4px', color: 'white'
-                }}>
-                    Error: {error.message || 'Unknown error code ' + error.code}
-                </div>
-            )}
-            <video
-                ref={videoRef}
-                className="shaka-video"
-                style={{ width: '100%', height: '100%' }}
-                autoPlay={autoPlay}
-            />
+          <div
+            style={{
+              width: 36,
+              height: 36,
+              border: '3px solid rgba(255,255,255,0.2)',
+              borderTopColor: 'var(--accent-light, #a78bfa)',
+              borderRadius: '50%',
+              animation: 'gravity-spin 0.8s linear infinite',
+            }}
+          />
+          <div style={{ color: 'rgba(255,255,255,0.85)', fontSize: '0.9rem' }}>
+            {statusText || 'Loading…'}
+          </div>
         </div>
-    );
+      )}
+
+      {error && (
+        <div
+          style={{
+            position: 'absolute',
+            top: 16,
+            left: 16,
+            right: 16,
+            zIndex: 1000,
+            background: 'rgba(127, 29, 29, 0.92)',
+            border: '1px solid rgba(248, 113, 113, 0.4)',
+            padding: '14px 16px',
+            borderRadius: 10,
+            color: 'white',
+            display: 'flex',
+            flexDirection: 'column',
+            gap: 10,
+            maxWidth: 520,
+          }}
+        >
+          <div style={{ fontWeight: 600, fontSize: '0.95rem' }}>Playback failed</div>
+          <div style={{ fontSize: '0.85rem', opacity: 0.9, lineHeight: 1.4 }}>{errorMessage}</div>
+          {error.code != null && (
+            <div style={{ fontSize: '0.75rem', opacity: 0.65 }}>
+              Shaka code {error.code}
+              {error.data?.[1] != null ? ` · HTTP ${error.data[1]}` : ''}
+            </div>
+          )}
+          <div>
+            <button
+              type="button"
+              onClick={handleRetry}
+              className="btn btn-secondary"
+              style={{ padding: '6px 14px', fontSize: '0.8rem' }}
+            >
+              Retry
+            </button>
+          </div>
+        </div>
+      )}
+
+      <video
+        ref={videoRef}
+        className="shaka-video"
+        style={{ width: '100%', height: '100%' }}
+        autoPlay={autoPlay}
+        playsInline
+      />
+    </div>
+  );
 };
 
 export default Player;

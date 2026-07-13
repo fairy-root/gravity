@@ -11,6 +11,7 @@ const Library = ({
     onPlay,
     onEdit,
     onDelete,
+    onDeleteGroup,
     onClearAll,
     totalCount,
     searchQuery,
@@ -88,7 +89,6 @@ const Library = ({
     return (
         <div
             ref={containerRef}
-            className="library-container"
             style={{
                 padding: '32px 40px',
                 width: '100%',
@@ -101,7 +101,6 @@ const Library = ({
             {/* Sticky Toolbar (appears on scroll) */}
             {stickyGroup && (
                 <div
-                    className="sticky-toolbar-mobile"
                     style={{
                         position: 'fixed',
                         top: 0,
@@ -192,24 +191,24 @@ const Library = ({
                     {/* Action Buttons */}
                     <button
                         onClick={onToggleAll}
-                        className="btn btn-secondary library-action-btn"
+                        className="btn btn-secondary"
+                        style={{ padding: '6px 10px', fontSize: '0.75rem' }}
                     >
-                        <span className="btn-icon">{allCollapsed ? '▼' : '▲'}</span>
-                        <span className="btn-text">{allCollapsed ? 'Expand' : 'Collapse'}</span>
+                        {allCollapsed ? 'Expand' : 'Collapse'}
                     </button>
                     <button
                         onClick={handleExportM3U}
-                        className="btn btn-secondary library-action-btn"
+                        className="btn btn-secondary"
+                        style={{ padding: '6px 10px', fontSize: '0.75rem' }}
                     >
-                        <span className="btn-icon">⬇</span>
-                        <span className="btn-text">Export</span>
+                        ⬇ Export
                     </button>
                     <button
                         onClick={onClearAll}
-                        className="btn btn-danger library-action-btn"
+                        className="btn btn-danger"
+                        style={{ padding: '6px 10px', fontSize: '0.75rem' }}
                     >
-                        <span className="btn-icon">✕</span>
-                        <span className="btn-text">Clear All</span>
+                        Clear All
                     </button>
                 </div>
             )}
@@ -230,32 +229,28 @@ const Library = ({
                             {searchQuery ? `${filteredCount} results` : `${totalCount} streams in ${sortedGroups.length} groups`}
                         </p>
                     </div>
-                    <div style={{ display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap' }}>
+                    <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
                         {displayGroups.length > 0 && (
                             <button
                                 onClick={onToggleAll}
-                                className="btn btn-secondary library-action-btn"
+                                className="btn btn-secondary"
+                                style={{ padding: '8px 12px', fontSize: '0.8rem' }}
                             >
-                                <span className="btn-icon">{allCollapsed ? '▼' : '▲'}</span>
-                                <span className="btn-text">{allCollapsed ? 'Expand All' : 'Collapse All'}</span>
+                                {allCollapsed ? 'Expand All' : 'Collapse All'}
                             </button>
                         )}
                         {totalCount > 0 && (
                             <>
                                 <button
                                     onClick={handleExportM3U}
-                                    className="btn btn-secondary library-action-btn"
+                                    className="btn btn-secondary"
+                                    style={{ padding: '8px 12px', fontSize: '0.8rem' }}
                                     title="Export library to M3U file"
                                 >
-                                    <span className="btn-icon">⬇</span>
-                                    <span className="btn-text">Export</span>
+                                    ⬇ Export
                                 </button>
-                                <button
-                                    onClick={onClearAll}
-                                    className="btn btn-danger library-action-btn"
-                                >
-                                    <span className="btn-icon">✕</span>
-                                    <span className="btn-text">Clear All</span>
+                                <button onClick={onClearAll} className="btn btn-danger" style={{ padding: '8px 12px', fontSize: '0.8rem' }}>
+                                    Clear All
                                 </button>
                             </>
                         )}
@@ -460,38 +455,79 @@ const Library = ({
                         style={{ marginBottom: '24px' }}
                     >
                         {/* Group Header */}
-                        <button
-                            onClick={() => onToggleGroup(group)}
+                        <div
                             style={{
                                 width: '100%',
                                 display: 'flex',
                                 alignItems: 'center',
-                                gap: '12px',
-                                padding: '12px 16px',
+                                gap: '8px',
+                                padding: '8px 10px 8px 16px',
                                 background: 'var(--bg-secondary)',
                                 border: '1px solid var(--border)',
                                 borderRadius: 'var(--radius-md)',
-                                cursor: 'pointer',
                                 color: 'var(--text-primary)',
                                 marginBottom: isCollapsed ? 0 : '16px',
                                 transition: 'all 0.2s'
                             }}
                         >
-                            <span style={{
-                                fontSize: '0.75rem',
-                                transition: 'transform 0.2s',
-                                transform: isCollapsed ? 'rotate(-90deg)' : 'rotate(0deg)'
-                            }}>▼</span>
-                            <span style={{ fontWeight: 600, flex: 1, textAlign: 'left' }}>{group}</span>
-                            <span style={{
-                                background: 'var(--accent-glow)',
-                                color: 'var(--accent-light)',
-                                padding: '2px 8px',
-                                borderRadius: 'var(--radius-sm)',
-                                fontSize: '0.75rem',
-                                fontWeight: 600
-                            }}>{items.length}</span>
-                        </button>
+                            <button
+                                type="button"
+                                onClick={() => onToggleGroup(group)}
+                                style={{
+                                    flex: 1,
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    gap: '12px',
+                                    background: 'none',
+                                    border: 'none',
+                                    cursor: 'pointer',
+                                    color: 'inherit',
+                                    padding: '4px 0',
+                                    minWidth: 0
+                                }}
+                            >
+                                <span style={{
+                                    fontSize: '0.75rem',
+                                    transition: 'transform 0.2s',
+                                    transform: isCollapsed ? 'rotate(-90deg)' : 'rotate(0deg)'
+                                }}>▼</span>
+                                <span style={{
+                                    fontWeight: 600,
+                                    flex: 1,
+                                    textAlign: 'left',
+                                    overflow: 'hidden',
+                                    textOverflow: 'ellipsis',
+                                    whiteSpace: 'nowrap'
+                                }}>{group}</span>
+                                <span style={{
+                                    background: 'var(--accent-glow)',
+                                    color: 'var(--accent-light)',
+                                    padding: '2px 8px',
+                                    borderRadius: 'var(--radius-sm)',
+                                    fontSize: '0.75rem',
+                                    fontWeight: 600
+                                }}>{items.length}</span>
+                            </button>
+                            {onDeleteGroup && (
+                                <button
+                                    type="button"
+                                    onClick={(e) => {
+                                        e.stopPropagation();
+                                        onDeleteGroup(group);
+                                    }}
+                                    className="btn btn-danger"
+                                    title={`Delete group "${group}"`}
+                                    aria-label={`Delete group ${group}`}
+                                    style={{
+                                        padding: '6px 10px',
+                                        fontSize: '0.75rem',
+                                        flexShrink: 0
+                                    }}
+                                >
+                                    Delete
+                                </button>
+                            )}
+                        </div>
 
                         {/* Group Items */}
                         {!isCollapsed && (
