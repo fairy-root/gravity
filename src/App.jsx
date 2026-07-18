@@ -44,7 +44,15 @@ function App() {
   const [prefs, setPrefs] = useState(loadPrefsFromStorage);
   const [searchQuery, setSearchQuery] = useState('');
   const [confirmModal, setConfirmModal] = useState({ isOpen: false, title: '', message: '', onConfirm: null });
+  const [sidebarOpen, setSidebarOpen] = useState(false);
   const isFirstRender = useRef(true);
+
+  const closeSidebar = () => setSidebarOpen(false);
+
+  const setViewAndClose = (nextView) => {
+    setView(nextView);
+    setSidebarOpen(false);
+  };
 
   const [formConfig, setFormConfig] = useState({
     name: 'New Stream',
@@ -77,6 +85,26 @@ function App() {
   useEffect(() => {
     localStorage.setItem('gravity_prefs', JSON.stringify(prefs));
   }, [prefs]);
+
+  // Lock body scroll while mobile drawer is open
+  useEffect(() => {
+    if (!sidebarOpen) return undefined;
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => {
+      document.body.style.overflow = prev;
+    };
+  }, [sidebarOpen]);
+
+  // Close drawer on Escape
+  useEffect(() => {
+    if (!sidebarOpen) return undefined;
+    const onKeyDown = (e) => {
+      if (e.key === 'Escape') setSidebarOpen(false);
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [sidebarOpen]);
 
   // Group items by group name
   const groupedLibrary = library.reduce((acc, item) => {
@@ -112,6 +140,7 @@ function App() {
     if (e) e.preventDefault();
     setActiveConfig({ ...formConfig });
     setView('player');
+    setSidebarOpen(false);
   };
 
   const handleSaveToLibrary = () => {
@@ -136,6 +165,7 @@ function App() {
       referrer: '',
       authorization: ''
     });
+    setSidebarOpen(false);
   };
 
   const handleImportM3U = (content) => {
@@ -144,12 +174,20 @@ function App() {
       const withTimestamp = playlists.map(p => ({ ...p, addedAt: Date.now() }));
       setLibrary(prev => [...prev, ...withTimestamp]);
       setView('library');
+      setSidebarOpen(false);
     }
   };
 
   const handlePlayFromLibrary = (item) => {
     setActiveConfig(item);
     setView('player');
+    setSidebarOpen(false);
+  };
+
+  const handleEdit = (item) => {
+    setFormConfig({ ...item });
+    setEditingId(item.id);
+    setSidebarOpen(true);
   };
 
   const handleDelete = (id) => {
@@ -212,11 +250,6 @@ function App() {
     });
   };
 
-  const handleEdit = (item) => {
-    setFormConfig({ ...item });
-    setEditingId(item.id);
-  };
-
   const handleCancelEdit = () => {
     setEditingId(null);
     setFormConfig({
@@ -234,30 +267,79 @@ function App() {
   };
 
   return (
-    <div className="app-container">
-      {/* Sidebar */}
-      <aside className="sidebar">
-        <div style={{ marginBottom: '24px' }}>
-          <h1
-            style={{ cursor: 'pointer', marginBottom: '4px' }}
-            onClick={() => setView('library')}
-          >
-            Gravity
-          </h1>
+    <div className={`app-container${sidebarOpen ? ' sidebar-open' : ''}`}>
+      {/* Mobile top bar */}
+      <header className="mobile-topbar">
+        <button
+          type="button"
+          className="mobile-menu-btn"
+          onClick={() => setSidebarOpen((open) => !open)}
+          aria-label={sidebarOpen ? 'Close menu' : 'Open menu'}
+          aria-expanded={sidebarOpen}
+        >
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+            {sidebarOpen ? (
+              <>
+                <line x1="18" y1="6" x2="6" y2="18" />
+                <line x1="6" y1="6" x2="18" y2="18" />
+              </>
+            ) : (
+              <>
+                <line x1="3" y1="6" x2="21" y2="6" />
+                <line x1="3" y1="12" x2="21" y2="12" />
+                <line x1="3" y1="18" x2="21" y2="18" />
+              </>
+            )}
+          </svg>
+        </button>
+        <h1 className="mobile-topbar-title" onClick={() => setViewAndClose('library')}>
+          Gravity
+        </h1>
+        <span className="mobile-topbar-view">
+          {view === 'library' ? 'Library' : 'Player'}
+        </span>
+      </header>
+
+      {/* Drawer backdrop (mobile) */}
+      <div
+        className="sidebar-backdrop"
+        onClick={closeSidebar}
+        aria-hidden={!sidebarOpen}
+      />
+
+      {/* Sidebar / config drawer */}
+      <aside className={`sidebar${sidebarOpen ? ' is-open' : ''}`} id="app-sidebar">
+        <div className="sidebar-brand" style={{ marginBottom: '24px' }}>
+          <div className="sidebar-brand-row">
+            <h1
+              style={{ cursor: 'pointer', marginBottom: '4px' }}
+              onClick={() => setViewAndClose('library')}
+            >
+              Gravity
+            </h1>
+            <button
+              type="button"
+              className="sidebar-close-btn"
+              onClick={closeSidebar}
+              aria-label="Close menu"
+            >
+              ✕
+            </button>
+          </div>
           <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>Network Stream Player</p>
         </div>
 
-        <div className="tab-group" style={{ marginBottom: '24px' }}>
+        <div className="tab-group sidebar-view-tabs" style={{ marginBottom: '24px' }}>
           <button
             type="button"
-            onClick={() => setView('library')}
+            onClick={() => setViewAndClose('library')}
             className={`tab-btn ${view === 'library' ? 'active' : ''}`}
           >
             Library
           </button>
           <button
             type="button"
-            onClick={() => setView('player')}
+            onClick={() => setViewAndClose('player')}
             className={`tab-btn ${view === 'player' ? 'active' : ''}`}
           >
             Player {activeConfig && '●'}
@@ -277,13 +359,14 @@ function App() {
 
       {/* Main */}
       <main className="player-area" style={{ position: 'relative' }}>
-        <div style={{
-          position: 'absolute',
-          inset: 0,
-          display: view === 'player' ? 'flex' : 'none',
-          alignItems: 'center',
-          justifyContent: 'center'
-        }}>
+        <div
+          className="view-panel"
+          style={{
+            display: view === 'player' ? 'flex' : 'none',
+            alignItems: 'center',
+            justifyContent: 'center'
+          }}
+        >
           {activeConfig ? (
             <Player
               manifestUrl={activeConfig.manifestUrl}
@@ -298,24 +381,25 @@ function App() {
               autoPlay={true}
             />
           ) : (
-            <div style={{ textAlign: 'center', color: 'var(--text-muted)', maxWidth: '300px' }}>
+            <div className="empty-player" style={{ textAlign: 'center', color: 'var(--text-muted)', maxWidth: '300px', padding: '0 16px' }}>
               <div style={{ fontSize: '48px', marginBottom: '16px', opacity: 0.5 }}>📡</div>
               <h2 style={{ fontSize: '1rem', color: 'var(--text-primary)', marginBottom: '8px', textTransform: 'none', letterSpacing: 0 }}>
                 No stream playing
               </h2>
               <p style={{ fontSize: '0.875rem' }}>
-                Enter a stream URL in the sidebar or select one from your library
+                Enter a stream URL in the menu or select one from your library
               </p>
             </div>
           )}
         </div>
 
-        <div style={{
-          position: 'absolute',
-          inset: 0,
-          display: view === 'library' ? 'block' : 'none',
-          overflow: 'auto'
-        }}>
+        <div
+          className="view-panel"
+          style={{
+            display: view === 'library' ? 'block' : 'none',
+            overflow: 'auto'
+          }}
+        >
           <Library
             groupedItems={groupedLibrary}
             sortedGroups={sortedGroups}
@@ -345,6 +429,33 @@ function App() {
           />
         </div>
       </main>
+
+      {/* Mobile bottom navigation */}
+      <nav className="mobile-bottom-nav" aria-label="Main">
+        <button
+          type="button"
+          className={`mobile-nav-btn ${view === 'library' ? 'active' : ''}`}
+          onClick={() => setViewAndClose('library')}
+        >
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+            <rect x="3" y="3" width="7" height="7" rx="1" />
+            <rect x="14" y="3" width="7" height="7" rx="1" />
+            <rect x="3" y="14" width="7" height="7" rx="1" />
+            <rect x="14" y="14" width="7" height="7" rx="1" />
+          </svg>
+          <span>Library</span>
+        </button>
+        <button
+          type="button"
+          className={`mobile-nav-btn ${view === 'player' ? 'active' : ''}`}
+          onClick={() => setViewAndClose('player')}
+        >
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+            <polygon points="6 3 20 12 6 21 6 3" fill={view === 'player' ? 'currentColor' : 'none'} />
+          </svg>
+          <span>Player{activeConfig ? ' ●' : ''}</span>
+        </button>
+      </nav>
 
       {/* Confirmation Modal */}
       <ConfirmModal

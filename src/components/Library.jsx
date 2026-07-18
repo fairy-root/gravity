@@ -80,42 +80,11 @@ const Library = ({
         downloadM3U(allItems, 'gravity_playlist.m3u');
     };
 
-    const gridCols = {
-        small: 'repeat(auto-fill, minmax(200px, 1fr))',
-        medium: 'repeat(auto-fill, minmax(280px, 1fr))',
-        large: 'repeat(auto-fill, minmax(380px, 1fr))'
-    };
-
     return (
-        <div
-            ref={containerRef}
-            style={{
-                padding: '32px 40px',
-                width: '100%',
-                height: '100%',
-                overflowY: 'auto',
-                background: 'linear-gradient(180deg, rgba(139, 92, 246, 0.03) 0%, transparent 30%)',
-                position: 'relative'
-            }}
-        >
+        <div ref={containerRef} className="library-root">
             {/* Sticky Toolbar (appears on scroll) */}
             {stickyGroup && (
-                <div
-                    style={{
-                        position: 'fixed',
-                        top: 0,
-                        left: 340,
-                        right: 0,
-                        zIndex: 100,
-                        background: 'var(--bg-primary)',
-                        padding: '10px 24px',
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: '10px',
-                        borderBottom: '1px solid var(--border)',
-                        boxShadow: '0 4px 20px rgba(0,0,0,0.3)'
-                    }}
-                >
+                <div className="library-sticky-toolbar">
                     {/* Compact Search */}
                     <div style={{ position: 'relative', flex: 1, maxWidth: '300px' }}>
                         <input
@@ -222,14 +191,14 @@ const Library = ({
                 paddingBottom: '20px',
                 borderBottom: '1px solid var(--border)'
             }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <div className="library-header-row">
                     <div>
                         <h1 style={{ fontSize: '1.75rem', marginBottom: '4px' }}>Library</h1>
                         <p style={{ color: 'var(--text-muted)', fontSize: '0.875rem' }}>
                             {searchQuery ? `${filteredCount} results` : `${totalCount} streams in ${sortedGroups.length} groups`}
                         </p>
                     </div>
-                    <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                    <div className="library-header-actions">
                         {displayGroups.length > 0 && (
                             <button
                                 onClick={onToggleAll}
@@ -313,7 +282,7 @@ const Library = ({
                 </div>
 
                 {/* Toolbar */}
-                <div style={{ display: 'flex', gap: '12px', alignItems: 'center', flexWrap: 'wrap' }}>
+                <div className="library-toolbar">
                     {/* Sort */}
                     <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                         <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>Sort:</span>
@@ -406,10 +375,11 @@ const Library = ({
 
             {/* Empty State */}
             {totalCount === 0 && (
-                <div style={{
+                <div className="library-empty-state" style={{
                     textAlign: 'center',
-                    marginTop: '120px',
-                    opacity: 0.6
+                    marginTop: 'min(120px, 18vh)',
+                    opacity: 0.6,
+                    padding: '0 12px'
                 }}>
                     <div style={{
                         width: '80px', height: '80px',
@@ -532,12 +502,7 @@ const Library = ({
                         {/* Group Items */}
                         {!isCollapsed && (
                             prefs.viewMode === 'grid' ? (
-                                <div style={{
-                                    display: 'grid',
-                                    gridTemplateColumns: gridCols[prefs.gridSize],
-                                    gap: '16px',
-                                    paddingLeft: '8px'
-                                }}>
+                                <div className={`library-grid grid-${prefs.gridSize || 'medium'}`}>
                                     {items.map(item => (
                                         <div
                                             key={item.id}
@@ -677,21 +642,11 @@ const Library = ({
                                 </div>
                             ) : (
                                 /* List View */
-                                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', paddingLeft: '8px' }}>
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', paddingLeft: 0 }}>
                                     {items.map(item => (
                                         <div
                                             key={item.id}
-                                            style={{
-                                                display: 'flex',
-                                                alignItems: 'center',
-                                                gap: '12px',
-                                                padding: '10px 14px',
-                                                background: 'var(--bg-secondary)',
-                                                border: '1px solid var(--border)',
-                                                borderRadius: 'var(--radius-md)',
-                                                transition: 'border-color 0.2s'
-                                            }}
-                                            className="list-item-hover"
+                                            className="list-item-hover library-list-item"
                                         >
                                             <div style={{
                                                 width: '40px', height: '40px', flexShrink: 0,
@@ -738,7 +693,7 @@ const Library = ({
                                             {item.drmScheme && (
                                                 <span className="badge" style={{ fontSize: '0.7rem', padding: '2px 6px' }}>{item.drmScheme}</span>
                                             )}
-                                            <div style={{ display: 'flex', gap: '6px' }}>
+                                            <div className="library-list-actions">
                                                 <button onClick={() => onPlay(item)} className="btn btn-primary" style={{ padding: '6px 12px', fontSize: '0.8rem' }}>▶ Play</button>
                                                 <button onClick={() => onEdit(item)} className="btn btn-secondary" style={{ padding: '6px 10px', fontSize: '0.8rem' }}>Edit</button>
                                                 <button onClick={() => onDelete(item.id)} className="btn btn-danger" style={{ padding: '6px 10px', fontSize: '0.8rem' }}>✕</button>

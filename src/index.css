@@ -51,8 +51,11 @@ body {
 .app-container {
   display: grid;
   grid-template-columns: 320px 1fr;
-  height: 100vh;
+  grid-template-rows: 1fr;
+  height: 100%;
+  height: 100dvh;
   overflow: hidden;
+  position: relative;
 }
 
 .sidebar {
@@ -64,6 +67,7 @@ body {
   flex-direction: column;
   overflow-y: auto;
   z-index: 10;
+  min-width: 0;
 }
 
 .sidebar::-webkit-scrollbar {
@@ -74,6 +78,30 @@ body {
   border-radius: 2px;
 }
 
+.sidebar-brand-row {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.sidebar-close-btn {
+  display: none;
+  background: transparent;
+  border: none;
+  color: var(--text-secondary);
+  font-size: 1rem;
+  cursor: pointer;
+  padding: 6px 10px;
+  border-radius: var(--radius-sm);
+  line-height: 1;
+}
+
+.sidebar-close-btn:hover {
+  background: var(--bg-tertiary);
+  color: var(--text-primary);
+}
+
 .player-area {
   background: var(--bg-primary);
   display: flex;
@@ -81,6 +109,22 @@ body {
   justify-content: center;
   position: relative;
   overflow: hidden;
+  min-width: 0;
+  min-height: 0;
+}
+
+.view-panel {
+  position: absolute;
+  inset: 0;
+  min-width: 0;
+  min-height: 0;
+}
+
+/* Mobile chrome — hidden on desktop */
+.mobile-topbar,
+.mobile-bottom-nav,
+.sidebar-backdrop {
+  display: none;
 }
 
 /* Typography */
@@ -420,4 +464,343 @@ video {
 .list-item-hover:hover {
   border-color: var(--border-light);
   background: var(--bg-tertiary);
+}
+
+/* Library layout helpers (used with classes for responsive overrides) */
+.library-root {
+  padding: 32px 40px;
+  width: 100%;
+  height: 100%;
+  overflow-y: auto;
+  background: linear-gradient(180deg, rgba(139, 92, 246, 0.03) 0%, transparent 30%);
+  position: relative;
+}
+
+.library-sticky-toolbar {
+  position: fixed;
+  top: 0;
+  left: 320px;
+  right: 0;
+  z-index: 100;
+  background: var(--bg-primary);
+  padding: 10px 24px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  border-bottom: 1px solid var(--border);
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+  flex-wrap: wrap;
+}
+
+.library-header-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.library-header-actions {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.library-toolbar {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.library-list-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 14px;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  transition: border-color 0.2s;
+  min-width: 0;
+}
+
+.library-list-actions {
+  display: flex;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+.library-grid {
+  display: grid;
+  gap: 16px;
+  padding-left: 8px;
+  min-width: 0;
+}
+
+.library-grid.grid-small {
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 160px), 1fr));
+}
+
+.library-grid.grid-medium {
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 240px), 1fr));
+}
+
+.library-grid.grid-large {
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 300px), 1fr));
+}
+
+/* ========== Responsive: tablet & mobile ========== */
+@media (max-width: 900px) {
+  .app-container {
+    display: flex;
+    flex-direction: column;
+    grid-template-columns: none;
+  }
+
+  .mobile-topbar {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 10px 14px;
+    padding-top: max(10px, env(safe-area-inset-top));
+    background: var(--bg-glass);
+    backdrop-filter: blur(16px);
+    border-bottom: 1px solid var(--border);
+    z-index: 20;
+    min-height: 52px;
+    flex-shrink: 0;
+  }
+
+  .mobile-menu-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 40px;
+    height: 40px;
+    border: none;
+    border-radius: var(--radius-md);
+    background: transparent;
+    color: var(--text-primary);
+    cursor: pointer;
+    flex-shrink: 0;
+  }
+
+  .mobile-menu-btn:hover {
+    background: var(--bg-tertiary);
+  }
+
+  .mobile-topbar-title {
+    font-size: 1.15rem;
+    margin: 0;
+    cursor: pointer;
+    flex: 1;
+    min-width: 0;
+  }
+
+  .mobile-topbar-view {
+    font-size: 0.8rem;
+    color: var(--text-muted);
+    text-transform: capitalize;
+    flex-shrink: 0;
+  }
+
+  .mobile-bottom-nav {
+    display: flex;
+    align-items: stretch;
+    justify-content: space-around;
+    gap: 4px;
+    padding: 6px 8px;
+    padding-bottom: max(6px, env(safe-area-inset-bottom));
+    background: var(--bg-glass);
+    backdrop-filter: blur(16px);
+    border-top: 1px solid var(--border);
+    z-index: 20;
+    flex-shrink: 0;
+  }
+
+  .mobile-nav-btn {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 2px;
+    padding: 8px 6px;
+    border: none;
+    border-radius: var(--radius-md);
+    background: transparent;
+    color: var(--text-muted);
+    font-family: inherit;
+    font-size: 0.7rem;
+    font-weight: 500;
+    cursor: pointer;
+    transition: var(--transition);
+  }
+
+  .mobile-nav-btn.active {
+    color: var(--accent-light);
+  }
+
+  .mobile-nav-btn:hover {
+    background: rgba(255, 255, 255, 0.04);
+    color: var(--text-primary);
+  }
+
+  .mobile-nav-btn.active:hover {
+    color: var(--accent-light);
+  }
+
+  .sidebar-backdrop {
+    display: block;
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.55);
+    backdrop-filter: blur(2px);
+    z-index: 40;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.2s ease;
+  }
+
+  .app-container.sidebar-open .sidebar-backdrop {
+    opacity: 1;
+    pointer-events: auto;
+  }
+
+  .sidebar {
+    position: fixed;
+    top: 0;
+    left: 0;
+    bottom: 0;
+    width: min(320px, 88vw);
+    max-width: 100%;
+    z-index: 50;
+    transform: translateX(-105%);
+    transition: transform 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+    box-shadow: none;
+    border-right: 1px solid var(--border);
+    padding-bottom: max(24px, env(safe-area-inset-bottom));
+    padding-top: max(24px, env(safe-area-inset-top));
+  }
+
+  .sidebar.is-open {
+    transform: translateX(0);
+    box-shadow: var(--shadow-lg);
+  }
+
+  .sidebar-close-btn {
+    display: inline-flex;
+  }
+
+  .player-area {
+    flex: 1;
+    min-height: 0;
+    width: 100%;
+  }
+
+  .library-root {
+    padding: 16px 16px 24px;
+  }
+
+  .library-sticky-toolbar {
+    left: 0;
+    top: calc(52px + env(safe-area-inset-top, 0px));
+    right: 0;
+    padding: 8px 12px;
+    gap: 8px;
+  }
+
+  .library-header-row h1 {
+    font-size: 1.35rem !important;
+  }
+
+  .library-header-actions .btn {
+    padding: 6px 10px;
+    font-size: 0.75rem;
+  }
+
+  .library-grid {
+    padding-left: 0;
+    gap: 12px;
+  }
+
+  .library-grid.grid-medium,
+  .library-grid.grid-large {
+    grid-template-columns: repeat(auto-fill, minmax(min(100%, 160px), 1fr));
+  }
+
+  .library-list-item {
+    flex-wrap: wrap;
+    gap: 10px;
+  }
+
+  .library-list-actions {
+    width: 100%;
+    justify-content: flex-end;
+  }
+
+  .library-list-actions .btn {
+    flex: 1;
+  }
+
+  /* Shaka controls: keep usable on narrow screens */
+  .video-container .shaka-bottom-controls {
+    width: 100% !important;
+    padding: 0 4px !important;
+  }
+
+  .video-container .shaka-controls-button-panel {
+    flex-wrap: wrap;
+  }
+
+  .video-container .shaka-volume-bar-container {
+    width: 48px !important;
+  }
+}
+
+@media (max-width: 480px) {
+  .library-root {
+    padding: 12px 12px 20px;
+  }
+
+  .library-header-actions {
+    width: 100%;
+  }
+
+  .library-header-actions .btn {
+    flex: 1;
+    justify-content: center;
+  }
+
+  .library-toolbar {
+    gap: 8px;
+  }
+
+  .library-grid.grid-small,
+  .library-grid.grid-medium,
+  .library-grid.grid-large {
+    grid-template-columns: 1fr;
+  }
+
+  .stream-card {
+    padding: 12px;
+  }
+
+  .tab-btn {
+    padding: 8px 8px;
+    font-size: 0.75rem;
+  }
+}
+
+/* Prefer reduced motion */
+@media (prefers-reduced-motion: reduce) {
+  .sidebar {
+    transition: none;
+  }
+
+  .sidebar-backdrop {
+    transition: none;
+  }
 }
