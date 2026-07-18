@@ -11,6 +11,14 @@
 
 const PROXY_PREFIX = '/api/proxy/';
 
+/** Header names the edge proxy understands (channel config → upstream). */
+export const PROXY_HEADER = {
+  userAgent: 'X-Stream-User-Agent',
+  referer: 'X-Stream-Referer',
+  origin: 'X-Stream-Origin',
+  authorization: 'X-Stream-Authorization',
+};
+
 /** True when we should route media through the edge proxy. */
 export function shouldUseStreamProxy() {
   if (typeof window === 'undefined') return false;
@@ -48,7 +56,9 @@ export function wrapStreamUrl(uri) {
 
   if (typeof window !== 'undefined' && absolute.origin === window.location.origin) {
     // Same-origin (including already-proxied absolute form)
-    if (absolute.pathname.startsWith(PROXY_PREFIX)) return absolute.pathname + absolute.search;
+    if (absolute.pathname.startsWith(PROXY_PREFIX)) {
+      return absolute.pathname + absolute.search + absolute.hash;
+    }
     return uri;
   }
 
@@ -56,12 +66,14 @@ export function wrapStreamUrl(uri) {
     return uri;
   }
 
+  // Encode host safely (IPv6 brackets, etc.) while keeping path structure
+  const host = absolute.host; // includes port
   // /api/proxy/https/cdn.example.com/live/index.mpd?x=1
   return (
     PROXY_PREFIX +
     absolute.protocol.replace(':', '') +
     '/' +
-    absolute.host +
+    host +
     absolute.pathname +
     absolute.search
   );
@@ -81,5 +93,53 @@ export function unwrapStreamUrl(uri) {
     return `${m[1]}://${m[2]}${u.search}`;
   } catch {
     return uri;
+  }
+}
+
+/**
+ * Apply channel headers onto a Shaka networking request when using the proxy.
+ * Browser forbids setting User-Agent / often Referer; edge proxy applies them.
+ * @param {object} request Shaka request
+ * @param {{ userAgent?: string, referrer?: string, authorization?: string, headers?: object }} channel
+ */
+export function applyProxyRequestHeaders(request, channel = {}) {
+  if (!shouldUseStreamProxy() || !request?.headers) return;
+
+  const { userAgent, referrer, authorization, headers } = channel;
+
+  if (userAgent) {
+    request.headers[PROXY_HEADER.userAgent] = String(userAgent);
+  }
+  if (referrer) {
+    request.headers[PROXY_HEADER.referer] = String(referrer);
+    // Some CDNs also check Origin against the referrer site
+    try {
+      request.headers[PROXY_HEADER.origin] = new URL(referrer).origin;
+    } catch {
+      /* ignore invalid referrer */
+    }
+  }
+  if (authorization) {
+    request.headers[PROXY_HEADER.authorization] = String(authorization);
+  }
+
+  // Custom headers (skip UA — use X-Stream-User-Agent instead)
+  if (headers && typeof headers === 'object') {
+    Object.entries(headers).forEach(([k, v]) => {
+      if (v == null || !k) return;
+      if (/^user-agent$/i.test(k)) {
+        request.headers[PROXY_HEADER.userAgent] = String(v);
+        return;
+      }
+      if (/^referer$/i.test(k) || /^referrer$/i.test(k)) {
+        request.headers[PROXY_HEADER.referer] = String(v);
+        return;
+      }
+      if (/^authorization$/i.test(k)) {
+        request.headers[PROXY_HEADER.authorization] = String(v);
+        return;
+      }
+      request.headers[k] = String(v);
+    });
   }
 }

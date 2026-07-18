@@ -2,7 +2,11 @@ import React, { useEffect, useRef, useState, useCallback } from 'react';
 import shaka from 'shaka-player/dist/shaka-player.ui';
 import 'shaka-player/dist/controls.css';
 import { buildDrmConfig, formatShakaError } from '../utils/drm';
-import { wrapStreamUrl, shouldUseStreamProxy } from '../utils/streamProxy';
+import {
+  wrapStreamUrl,
+  shouldUseStreamProxy,
+  applyProxyRequestHeaders,
+} from '../utils/streamProxy';
 import {
   registerAspectRatioControl,
   applyAspectRatio,
@@ -61,27 +65,49 @@ const Player = ({
       filterRef.current = null;
     }
 
-    const filter = (_type, request) => {
-      // Route CDN traffic through same-origin proxy when hosted (avoids Origin 403)
-      if (request.uris && request.uris.length) {
+    // Only rewrite media-related requests (not APP/CMCD). License POSTs are
+    // allowed by the edge proxy so Widevine/PlayReady still work when hosted.
+    const RT = shaka.net.NetworkingEngine.RequestType || {};
+    const PROXY_TYPES = new Set(
+      [
+        RT.MANIFEST,
+        RT.SEGMENT,
+        RT.LICENSE,
+        RT.TIMING,
+        RT.KEY,
+        RT.SERVER_CERTIFICATE,
+      ].filter((v) => typeof v === 'number')
+    );
+
+    const filter = (type, request) => {
+      const h = headersRef.current || {};
+      const useProxy = shouldUseStreamProxy();
+      // If RequestType map is incomplete, wrap all non-APP traffic
+      const shouldWrap =
+        useProxy && (PROXY_TYPES.size === 0 || PROXY_TYPES.has(type));
+
+      if (shouldWrap && request.uris && request.uris.length) {
         request.uris = request.uris.map((u) => wrapStreamUrl(u));
       }
 
-      const h = headersRef.current || {};
-      // Do NOT set User-Agent — forbidden in browsers and can break CORS preflight.
-      // Only set Referer when not using the proxy (proxy strips Origin/Referer upstream).
-      if (h.referrer && !shouldUseStreamProxy()) {
-        request.headers['Referer'] = h.referrer;
-      }
-      if (h.authorization) {
-        request.headers['Authorization'] = h.authorization;
-      }
-      if (h.headers && typeof h.headers === 'object') {
-        Object.entries(h.headers).forEach(([k, v]) => {
-          if (k && v != null && !/^user-agent$/i.test(k)) {
-            request.headers[k] = String(v);
-          }
-        });
+      if (useProxy && shouldWrap) {
+        // Browser cannot set User-Agent; edge proxy applies X-Stream-* upstream
+        applyProxyRequestHeaders(request, h);
+      } else {
+        // Direct (localhost): set what the browser allows
+        if (h.referrer) {
+          request.headers['Referer'] = h.referrer;
+        }
+        if (h.authorization) {
+          request.headers['Authorization'] = h.authorization;
+        }
+        if (h.headers && typeof h.headers === 'object') {
+          Object.entries(h.headers).forEach(([k, v]) => {
+            if (k && v != null && !/^user-agent$/i.test(k)) {
+              request.headers[k] = String(v);
+            }
+          });
+        }
       }
     };
 

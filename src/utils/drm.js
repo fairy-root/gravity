@@ -88,15 +88,31 @@ export const formatShakaError = (error) => {
   if (code === 1001) {
     if (status === 403) {
       detail =
-        'HTTP 403 — stream CDN blocked this site’s origin. Redeploy with the Netlify stream proxy, or play from localhost.';
+        'HTTP 403 — CDN rejected the request. Set Referer / User-Agent on the channel if required, or try from localhost.';
+    } else if (status === 404) {
+      detail = 'HTTP 404 — stream URL not found (expired link or bad path)';
+    } else if (status === 405) {
+      detail = 'HTTP 405 — proxy rejected method (redeploy latest stream proxy)';
+    } else if (status === 502 || status === 503) {
+      detail = `HTTP ${status} — proxy could not reach the stream CDN`;
     } else {
       detail = `HTTP ${status ?? 'error'} loading stream`;
     }
     if (uri) {
       try {
-        const path = new URL(uri, 'http://local').pathname;
-        const short = path.split('/').filter(Boolean).slice(-2).join('/');
-        detail += ` (${short || path})`;
+        // Prefer unwrapped CDN URL for readability
+        let display = uri;
+        try {
+          // dynamic import path avoided — unwrap inline
+          const u = new URL(uri, typeof window !== 'undefined' ? window.location.origin : 'http://local');
+          const m = u.pathname.match(/^\/api\/proxy\/(https?)\/(.+)$/);
+          if (m) display = `${m[1]}://${m[2]}${u.search}`;
+        } catch {
+          /* keep uri */
+        }
+        const short =
+          display.length > 90 ? `${display.slice(0, 40)}…${display.slice(-40)}` : display;
+        detail += ` — ${short}`;
       } catch {
         detail += ` (${uri.slice(0, 80)})`;
       }
@@ -105,6 +121,8 @@ export const formatShakaError = (error) => {
     detail = 'Network error (connection failed or CORS blocked)';
   } else if (code === 1003) {
     detail = 'Request timed out';
+  } else if (code === 4012 || code === 4032) {
+    detail = 'No supported audio/video codecs in this stream for your browser';
   } else if (code === 6001 || code === 6007 || code === 6008) {
     detail = 'DRM error — check ClearKey / license settings';
   }
