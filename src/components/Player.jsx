@@ -6,6 +6,8 @@ import {
   wrapStreamUrl,
   shouldUseStreamProxy,
   applyProxyRequestHeaders,
+  handleProxyHttpError,
+  isProxiedUrl,
 } from '../utils/streamProxy';
 import {
   registerAspectRatioControl,
@@ -81,20 +83,24 @@ const Player = ({
 
     const filter = (type, request) => {
       const h = headersRef.current || {};
-      const useProxy = shouldUseStreamProxy();
-      // If RequestType map is incomplete, wrap all non-APP traffic
-      const shouldWrap =
-        useProxy && (PROXY_TYPES.size === 0 || PROXY_TYPES.has(type));
+      // If RequestType map is incomplete, consider all types
+      const typeOk = PROXY_TYPES.size === 0 || PROXY_TYPES.has(type);
 
-      if (shouldWrap && request.uris && request.uris.length) {
+      if (typeOk && request.uris && request.uris.length) {
         request.uris = request.uris.map((u) => wrapStreamUrl(u));
       }
 
-      if (useProxy && shouldWrap) {
+      const anyProxied =
+        typeOk &&
+        (request.uris || []).some(
+          (u) => isProxiedUrl(u) || (typeof u === 'string' && u.includes('/api/proxy/'))
+        );
+
+      if (anyProxied) {
         // Browser cannot set User-Agent; edge proxy applies X-Stream-* upstream
         applyProxyRequestHeaders(request, h);
       } else {
-        // Direct (localhost): set what the browser allows
+        // Direct fetch (localhost, or CDN that blocks edge IPs but allows CORS)
         if (h.referrer) {
           request.headers['Referer'] = h.referrer;
         }
@@ -197,7 +203,7 @@ const Player = ({
       setError(null);
       setStatusText(channelName ? `Loading ${channelName}…` : 'Loading…');
 
-      try {
+      const tryLoad = async () => {
         try {
           await player.unload();
         } catch {
@@ -234,6 +240,10 @@ const Player = ({
             console.warn('[Gravity] autoplay blocked:', playErr?.message || playErr);
           }
         }
+      };
+
+      try {
+        await tryLoad();
 
         if (!mountedRef.current || gen !== loadGenRef.current) return;
         setError(null);
@@ -241,6 +251,29 @@ const Player = ({
         setStatusText('');
       } catch (e) {
         if (!mountedRef.current || gen !== loadGenRef.current) return;
+
+        // Medianova/Starz-style: edge proxy IP blocked, but browser CORS works.
+        // Mark host for direct fetch and retry once.
+        if (handleProxyHttpError(e)) {
+          console.warn('[Gravity] Proxy 403 — retrying direct (no edge proxy)…');
+          setStatusText(channelName ? `Retrying ${channelName}…` : 'Retrying…');
+          try {
+            await tryLoad();
+            if (!mountedRef.current || gen !== loadGenRef.current) return;
+            setError(null);
+            setLoading(false);
+            setStatusText('');
+            return;
+          } catch (e2) {
+            if (!mountedRef.current || gen !== loadGenRef.current) return;
+            console.error('[Gravity] Load failed (direct retry):', e2);
+            setError(e2);
+            setLoading(false);
+            setStatusText('');
+            return;
+          }
+        }
+
         console.error('[Gravity] Load failed:', e);
         setError(e);
         setLoading(false);
@@ -346,7 +379,9 @@ const Player = ({
       // Mid-stream buffering: Shaka built-in spinner only
 
       if (shouldUseStreamProxy()) {
-        console.info('[Gravity] Stream proxy enabled (hosted origin)');
+        console.info(
+          '[Gravity] Stream proxy enabled (hosted origin). CDNs that block edge IPs (e.g. Starz/Medianova) use direct fetch.'
+        );
       }
 
       setPlayerReady(true);

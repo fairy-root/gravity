@@ -87,8 +87,12 @@ export const formatShakaError = (error) => {
   // NETWORK.BAD_HTTP_STATUS = 1001
   if (code === 1001) {
     if (status === 403) {
-      detail =
-        'HTTP 403 — CDN rejected the request. Set Referer / User-Agent on the channel if required, or try from localhost.';
+      const viaProxy =
+        typeof uri === 'string' &&
+        (uri.includes('/api/proxy/') || uri.startsWith('/api/proxy/'));
+      detail = viaProxy
+        ? 'HTTP 403 — CDN blocked the edge proxy (datacenter IP). Gravity will retry direct; if this persists, the stream may need a token/Referer or only works from certain regions.'
+        : 'HTTP 403 — CDN rejected the request. Set Referer / User-Agent on the channel if required.';
     } else if (status === 404) {
       detail = 'HTTP 404 — stream URL not found (expired link or bad path)';
     } else if (status === 405) {
