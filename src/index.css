@@ -429,11 +429,12 @@ video {
 }
 
 .player-channel-banner {
-  padding: 12px 12px 40px;
+  /* Height hugs logo+title; gradient fills that band only */
+  padding: 10px 12px 12px;
   background: linear-gradient(
     to bottom,
     rgba(0, 0, 0, 0.78) 0%,
-    rgba(0, 0, 0, 0.42) 50%,
+    rgba(0, 0, 0, 0.42) 70%,
     rgba(0, 0, 0, 0) 100%
   );
   /* Same fade as Shaka's control button panel / scrim */
@@ -450,16 +451,16 @@ video {
 .player-channel-info {
   display: flex;
   align-items: center;
-  gap: 14px;
+  gap: 10px;
   max-width: min(72vw, 280px);
   min-width: 0;
 }
 
 .player-channel-logo {
-  width: 72px;
-  height: 72px;
+  width: 36px;
+  height: 36px;
   flex-shrink: 0;
-  border-radius: 12px;
+  border-radius: 8px;
   overflow: hidden;
   display: flex;
   align-items: center;
@@ -481,7 +482,7 @@ video {
 }
 
 .player-channel-logo-initial {
-  font-size: 30px;
+  font-size: 15px;
   font-weight: 700;
   color: #fff;
   line-height: 1;
@@ -492,7 +493,7 @@ video {
   min-width: 0;
   flex: 1;
   color: #fff;
-  font-size: 1.8rem;
+  font-size: 0.9rem;
   font-weight: 600;
   line-height: 1.25;
   letter-spacing: 0.01em;
@@ -504,26 +505,26 @@ video {
 
 @media (max-width: 640px) {
   .player-channel-banner {
-    padding: 10px 10px 32px;
+    padding: 8px 10px 10px;
   }
 
   .player-channel-info {
     max-width: min(78vw, 220px);
-    gap: 12px;
+    gap: 8px;
   }
 
   .player-channel-logo {
-    width: 60px;
-    height: 60px;
-    border-radius: 10px;
+    width: 30px;
+    height: 30px;
+    border-radius: 6px;
   }
 
   .player-channel-logo-initial {
-    font-size: 26px;
+    font-size: 13px;
   }
 
   .player-channel-title {
-    font-size: 1.6rem;
+    font-size: 0.8rem;
   }
 }
 
