@@ -87,14 +87,19 @@ body {
 
 .sidebar-close-btn {
   display: none;
+  align-items: center;
+  justify-content: center;
   background: transparent;
   border: none;
   color: var(--text-secondary);
   font-size: 1rem;
   cursor: pointer;
-  padding: 6px 10px;
+  padding: 6px;
+  width: 36px;
+  height: 36px;
   border-radius: var(--radius-sm);
   line-height: 1;
+  flex-shrink: 0;
 }
 
 .sidebar-close-btn:hover {
@@ -262,6 +267,32 @@ select option {
 
 .btn-danger:hover {
   background: rgba(239, 68, 68, 0.25);
+}
+
+/* Icon + optional text action buttons */
+.btn-icon-action {
+  gap: 6px;
+}
+
+.btn-icon-action svg {
+  flex-shrink: 0;
+  display: block;
+}
+
+.btn-icon-action .btn-text {
+  white-space: nowrap;
+}
+
+/* Compact grid cards: icons only */
+.library-grid.grid-small .btn-icon-action .btn-text {
+  display: none;
+}
+
+.library-grid.grid-small .btn-icon-action {
+  gap: 0;
+  padding: 8px;
+  min-width: 36px;
+  min-height: 36px;
 }
 
 /* Tab Buttons */
@@ -721,6 +752,23 @@ video {
     font-size: 0.75rem;
   }
 
+  /* Small screens: action buttons are SVG icons, not text */
+  .btn-icon-action .btn-text {
+    display: none;
+  }
+
+  .btn-icon-action {
+    gap: 0;
+    padding: 8px !important;
+    min-width: 40px;
+    min-height: 40px;
+  }
+
+  .library-header-actions .btn-icon-action,
+  .library-sticky-toolbar .btn-icon-action {
+    flex: 0 0 auto;
+  }
+
   .library-grid {
     padding-left: 0;
     gap: 12px;
@@ -729,6 +777,10 @@ video {
   .library-grid.grid-medium,
   .library-grid.grid-large {
     grid-template-columns: repeat(auto-fill, minmax(min(100%, 160px), 1fr));
+  }
+
+  .stream-card-actions .btn-icon-action {
+    flex: 1;
   }
 
   .library-list-item {
@@ -745,18 +797,56 @@ video {
     flex: 1;
   }
 
-  /* Shaka controls: keep usable on narrow screens */
+  /* Shaka controls: keep all buttons (incl. settings) on one line */
   .video-container .shaka-bottom-controls {
     width: 100% !important;
-    padding: 0 4px !important;
+    max-width: 100% !important;
+    padding: 0 2px !important;
+    box-sizing: border-box;
   }
 
   .video-container .shaka-controls-button-panel {
-    flex-wrap: wrap;
+    flex-wrap: nowrap !important;
+    flex-shrink: 1;
+    min-width: 0;
+    width: 100%;
+    gap: 0;
+  }
+
+  /* Compact control buttons so overflow/settings stays on the same row */
+  .video-container .shaka-controls-button-panel > * {
+    flex-shrink: 0;
+  }
+
+  .video-container .shaka-controls-button-panel button {
+    margin: 0 !important;
+    padding: 0 2px !important;
+    min-width: 36px !important;
+    width: 36px !important;
+  }
+
+  .video-container .shaka-aspect-ratio-button {
+    min-width: 36px !important;
+  }
+
+  .video-container .shaka-current-time,
+  .video-container .shaka-controls-button-panel .shaka-current-time {
+    flex-shrink: 1;
+    min-width: 0;
+    font-size: 12px !important;
+    padding: 0 4px !important;
+    white-space: nowrap;
   }
 
   .video-container .shaka-volume-bar-container {
-    width: 48px !important;
+    width: 36px !important;
+    min-width: 28px !important;
+    flex-shrink: 1;
+  }
+
+  .video-container .shaka-overflow-menu-button,
+  .video-container .shaka-overflow-button {
+    flex-shrink: 0 !important;
   }
 }
 
@@ -772,6 +862,10 @@ video {
   .library-header-actions .btn {
     flex: 1;
     justify-content: center;
+  }
+
+  .library-header-actions .btn-icon-action {
+    flex: 1;
   }
 
   .library-toolbar {
@@ -791,6 +885,17 @@ video {
   .tab-btn {
     padding: 8px 8px;
     font-size: 0.75rem;
+  }
+
+  /* Even tighter player controls on phones so settings stays on the bar */
+  .video-container .shaka-volume-bar-container {
+    width: 28px !important;
+    min-width: 20px !important;
+  }
+
+  .video-container .shaka-controls-button-panel button {
+    min-width: 32px !important;
+    width: 32px !important;
   }
 }
 

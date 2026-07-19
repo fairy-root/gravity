@@ -1,6 +1,73 @@
 import React, { useMemo, useRef, useEffect, useState } from 'react';
 import { downloadM3U } from '../utils/m3uGenerator';
 
+/** Compact stroke icons for toolbar / card actions (16px default). */
+const Icon = ({ children, size = 16, ...props }) => (
+    <svg
+        width={size}
+        height={size}
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        aria-hidden="true"
+        {...props}
+    >
+        {children}
+    </svg>
+);
+
+const IconPlay = (p) => (
+    <Icon {...p} fill="currentColor" stroke="none">
+        <polygon points="6 3 20 12 6 21 6 3" />
+    </Icon>
+);
+const IconEdit = (p) => (
+    <Icon {...p}>
+        <path d="M12 20h9" />
+        <path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z" />
+    </Icon>
+);
+const IconTrash = (p) => (
+    <Icon {...p}>
+        <polyline points="3 6 5 6 21 6" />
+        <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+        <line x1="10" y1="11" x2="10" y2="17" />
+        <line x1="14" y1="11" x2="14" y2="17" />
+    </Icon>
+);
+const IconDownload = (p) => (
+    <Icon {...p}>
+        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+        <polyline points="7 10 12 15 17 10" />
+        <line x1="12" y1="15" x2="12" y2="3" />
+    </Icon>
+);
+const IconExpand = (p) => (
+    <Icon {...p}>
+        <polyline points="15 3 21 3 21 9" />
+        <polyline points="9 21 3 21 3 15" />
+        <line x1="21" y1="3" x2="14" y2="10" />
+        <line x1="3" y1="21" x2="10" y2="14" />
+    </Icon>
+);
+const IconCollapse = (p) => (
+    <Icon {...p}>
+        <polyline points="4 14 10 14 10 20" />
+        <polyline points="20 10 14 10 14 4" />
+        <line x1="14" y1="10" x2="21" y2="3" />
+        <line x1="3" y1="21" x2="10" y2="14" />
+    </Icon>
+);
+const IconClose = (p) => (
+    <Icon {...p}>
+        <line x1="18" y1="6" x2="6" y2="18" />
+        <line x1="6" y1="6" x2="18" y2="18" />
+    </Icon>
+);
+
 const Library = ({
     groupedItems,
     sortedGroups,
@@ -159,25 +226,37 @@ const Library = ({
 
                     {/* Action Buttons */}
                     <button
+                        type="button"
                         onClick={onToggleAll}
-                        className="btn btn-secondary"
+                        className="btn btn-secondary btn-icon-action"
                         style={{ padding: '6px 10px', fontSize: '0.75rem' }}
+                        title={allCollapsed ? 'Expand all' : 'Collapse all'}
+                        aria-label={allCollapsed ? 'Expand all' : 'Collapse all'}
                     >
-                        {allCollapsed ? 'Expand' : 'Collapse'}
+                        {allCollapsed ? <IconExpand /> : <IconCollapse />}
+                        <span className="btn-text">{allCollapsed ? 'Expand' : 'Collapse'}</span>
                     </button>
                     <button
+                        type="button"
                         onClick={handleExportM3U}
-                        className="btn btn-secondary"
+                        className="btn btn-secondary btn-icon-action"
                         style={{ padding: '6px 10px', fontSize: '0.75rem' }}
+                        title="Export library to M3U"
+                        aria-label="Export library to M3U"
                     >
-                        ⬇ Export
+                        <IconDownload />
+                        <span className="btn-text">Export</span>
                     </button>
                     <button
+                        type="button"
                         onClick={onClearAll}
-                        className="btn btn-danger"
+                        className="btn btn-danger btn-icon-action"
                         style={{ padding: '6px 10px', fontSize: '0.75rem' }}
+                        title="Clear all"
+                        aria-label="Clear all"
                     >
-                        Clear All
+                        <IconTrash />
+                        <span className="btn-text">Clear All</span>
                     </button>
                 </div>
             )}
@@ -201,25 +280,40 @@ const Library = ({
                     <div className="library-header-actions">
                         {displayGroups.length > 0 && (
                             <button
+                                type="button"
                                 onClick={onToggleAll}
-                                className="btn btn-secondary"
+                                className="btn btn-secondary btn-icon-action"
                                 style={{ padding: '8px 12px', fontSize: '0.8rem' }}
+                                title={allCollapsed ? 'Expand all' : 'Collapse all'}
+                                aria-label={allCollapsed ? 'Expand all' : 'Collapse all'}
                             >
-                                {allCollapsed ? 'Expand All' : 'Collapse All'}
+                                {allCollapsed ? <IconExpand /> : <IconCollapse />}
+                                <span className="btn-text">{allCollapsed ? 'Expand All' : 'Collapse All'}</span>
                             </button>
                         )}
                         {totalCount > 0 && (
                             <>
                                 <button
+                                    type="button"
                                     onClick={handleExportM3U}
-                                    className="btn btn-secondary"
+                                    className="btn btn-secondary btn-icon-action"
                                     style={{ padding: '8px 12px', fontSize: '0.8rem' }}
                                     title="Export library to M3U file"
+                                    aria-label="Export library to M3U file"
                                 >
-                                    ⬇ Export
+                                    <IconDownload />
+                                    <span className="btn-text">Export</span>
                                 </button>
-                                <button onClick={onClearAll} className="btn btn-danger" style={{ padding: '8px 12px', fontSize: '0.8rem' }}>
-                                    Clear All
+                                <button
+                                    type="button"
+                                    onClick={onClearAll}
+                                    className="btn btn-danger btn-icon-action"
+                                    style={{ padding: '8px 12px', fontSize: '0.8rem' }}
+                                    title="Clear all"
+                                    aria-label="Clear all"
+                                >
+                                    <IconTrash />
+                                    <span className="btn-text">Clear All</span>
                                 </button>
                             </>
                         )}
@@ -264,7 +358,9 @@ const Library = ({
                     </svg>
                     {searchQuery && (
                         <button
+                            type="button"
                             onClick={() => onSearchChange('')}
+                            aria-label="Clear search"
                             style={{
                                 position: 'absolute',
                                 right: '12px',
@@ -274,10 +370,14 @@ const Library = ({
                                 border: 'none',
                                 color: 'var(--text-muted)',
                                 cursor: 'pointer',
-                                fontSize: '1.1rem',
-                                padding: '4px'
+                                padding: '4px',
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                justifyContent: 'center'
                             }}
-                        >✕</button>
+                        >
+                            <IconClose size={18} />
+                        </button>
                     )}
                 </div>
 
@@ -485,7 +585,7 @@ const Library = ({
                                         e.stopPropagation();
                                         onDeleteGroup(group);
                                     }}
-                                    className="btn btn-danger"
+                                    className="btn btn-danger btn-icon-action"
                                     title={`Delete group "${group}"`}
                                     aria-label={`Delete group ${group}`}
                                     style={{
@@ -494,7 +594,8 @@ const Library = ({
                                         flexShrink: 0
                                     }}
                                 >
-                                    Delete
+                                    <IconTrash />
+                                    <span className="btn-text">Delete</span>
                                 </button>
                             )}
                         </div>
@@ -628,14 +729,39 @@ const Library = ({
                                                     )}
                                                 </div>
                                             </div>
-                                            <div style={{ display: 'flex', gap: prefs.gridSize === 'small' ? '4px' : '8px', flexWrap: 'wrap' }}>
-                                                <button onClick={() => onPlay(item)} className="btn btn-primary" style={prefs.gridSize === 'small' ? { flex: 1, padding: '6px 8px', fontSize: '0.75rem' } : { flex: 1 }}>
-                                                    <span>▶</span>{prefs.gridSize !== 'small' && ' Play'}
+                                            <div className="stream-card-actions" style={{ display: 'flex', gap: prefs.gridSize === 'small' ? '4px' : '8px', flexWrap: 'wrap' }}>
+                                                <button
+                                                    type="button"
+                                                    onClick={() => onPlay(item)}
+                                                    className="btn btn-primary btn-icon-action"
+                                                    title="Play"
+                                                    aria-label={`Play ${item.name || 'stream'}`}
+                                                    style={prefs.gridSize === 'small' ? { flex: 1, padding: '6px 8px', fontSize: '0.75rem' } : { flex: 1 }}
+                                                >
+                                                    <IconPlay />
+                                                    <span className="btn-text">Play</span>
                                                 </button>
-                                                <button onClick={() => onEdit(item)} className="btn btn-secondary" style={prefs.gridSize === 'small' ? { padding: '6px 8px', fontSize: '0.75rem' } : {}}>
-                                                    {prefs.gridSize === 'small' ? '✎' : 'Edit'}
+                                                <button
+                                                    type="button"
+                                                    onClick={() => onEdit(item)}
+                                                    className="btn btn-secondary btn-icon-action"
+                                                    title="Edit"
+                                                    aria-label={`Edit ${item.name || 'stream'}`}
+                                                    style={prefs.gridSize === 'small' ? { padding: '6px 8px', fontSize: '0.75rem' } : {}}
+                                                >
+                                                    <IconEdit />
+                                                    <span className="btn-text">Edit</span>
                                                 </button>
-                                                <button onClick={() => onDelete(item.id)} className="btn btn-danger" style={prefs.gridSize === 'small' ? { padding: '6px 8px', fontSize: '0.75rem' } : { padding: '10px 12px' }}>✕</button>
+                                                <button
+                                                    type="button"
+                                                    onClick={() => onDelete(item.id)}
+                                                    className="btn btn-danger btn-icon-action"
+                                                    title="Delete"
+                                                    aria-label={`Delete ${item.name || 'stream'}`}
+                                                    style={prefs.gridSize === 'small' ? { padding: '6px 8px', fontSize: '0.75rem' } : { padding: '10px 12px' }}
+                                                >
+                                                    <IconTrash />
+                                                </button>
                                             </div>
                                         </div>
                                     ))}
@@ -694,9 +820,38 @@ const Library = ({
                                                 <span className="badge" style={{ fontSize: '0.7rem', padding: '2px 6px' }}>{item.drmScheme}</span>
                                             )}
                                             <div className="library-list-actions">
-                                                <button onClick={() => onPlay(item)} className="btn btn-primary" style={{ padding: '6px 12px', fontSize: '0.8rem' }}>▶ Play</button>
-                                                <button onClick={() => onEdit(item)} className="btn btn-secondary" style={{ padding: '6px 10px', fontSize: '0.8rem' }}>Edit</button>
-                                                <button onClick={() => onDelete(item.id)} className="btn btn-danger" style={{ padding: '6px 10px', fontSize: '0.8rem' }}>✕</button>
+                                                <button
+                                                    type="button"
+                                                    onClick={() => onPlay(item)}
+                                                    className="btn btn-primary btn-icon-action"
+                                                    title="Play"
+                                                    aria-label={`Play ${item.name || 'stream'}`}
+                                                    style={{ padding: '6px 12px', fontSize: '0.8rem' }}
+                                                >
+                                                    <IconPlay />
+                                                    <span className="btn-text">Play</span>
+                                                </button>
+                                                <button
+                                                    type="button"
+                                                    onClick={() => onEdit(item)}
+                                                    className="btn btn-secondary btn-icon-action"
+                                                    title="Edit"
+                                                    aria-label={`Edit ${item.name || 'stream'}`}
+                                                    style={{ padding: '6px 10px', fontSize: '0.8rem' }}
+                                                >
+                                                    <IconEdit />
+                                                    <span className="btn-text">Edit</span>
+                                                </button>
+                                                <button
+                                                    type="button"
+                                                    onClick={() => onDelete(item.id)}
+                                                    className="btn btn-danger btn-icon-action"
+                                                    title="Delete"
+                                                    aria-label={`Delete ${item.name || 'stream'}`}
+                                                    style={{ padding: '6px 10px', fontSize: '0.8rem' }}
+                                                >
+                                                    <IconTrash />
+                                                </button>
                                             </div>
                                         </div>
                                     ))}
