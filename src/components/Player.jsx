@@ -1,4 +1,5 @@
 import React, { useEffect, useRef, useState, useCallback } from 'react';
+import { createPortal } from 'react-dom';
 import shaka from 'shaka-player/dist/shaka-player.ui';
 import 'shaka-player/dist/controls.css';
 import { buildDrmConfig, formatShakaError } from '../utils/drm';
@@ -36,6 +37,7 @@ const Player = ({
   headers,
   autoPlay = false,
   channelName = '',
+  channelLogo = '',
 }) => {
   const videoRef = useRef(null);
   const containerRef = useRef(null);
@@ -49,6 +51,59 @@ const Player = ({
   const [error, setError] = useState(null);
   const [loading, setLoading] = useState(false);
   const [statusText, setStatusText] = useState('');
+  const [logoFailed, setLogoFailed] = useState(false);
+  /** Host node inside Shaka controls so the banner shares UI show/hide */
+  const [bannerHost, setBannerHost] = useState(null);
+
+  // Reset broken-logo state when channel (or logo URL) changes
+  useEffect(() => {
+    setLogoFailed(false);
+  }, [channelLogo, channelName]);
+
+  // Mount channel banner host inside .shaka-controls-container (after UI is ready)
+  useEffect(() => {
+    if (!playerReady) {
+      setBannerHost(null);
+      return undefined;
+    }
+    const container = containerRef.current;
+    if (!container) return undefined;
+
+    const attachHost = () => {
+      const controlsEl =
+        uiRef.current?.getControls?.()?.getControlsContainer?.() ||
+        container.querySelector('.shaka-controls-container');
+      if (!controlsEl) return false;
+
+      let host = controlsEl.querySelector(':scope > .player-channel-banner-host');
+      if (!host) {
+        host = document.createElement('div');
+        host.className = 'player-channel-banner-host';
+        controlsEl.insertBefore(host, controlsEl.firstChild);
+      }
+      setBannerHost(host);
+      return true;
+    };
+
+    if (attachHost()) {
+      return () => {
+        const host = container.querySelector('.player-channel-banner-host');
+        host?.remove();
+        setBannerHost(null);
+      };
+    }
+
+    // Controls may not be in the DOM on the first tick
+    const raf = requestAnimationFrame(() => {
+      attachHost();
+    });
+    return () => {
+      cancelAnimationFrame(raf);
+      const host = container.querySelector('.player-channel-banner-host');
+      host?.remove();
+      setBannerHost(null);
+    };
+  }, [playerReady]);
 
   // Latest headers for the networking filter (no re-register on every change)
   const headersRef = useRef({ userAgent, referrer, authorization, headers });
@@ -232,6 +287,9 @@ const Player = ({
         if (!mountedRef.current || gen !== loadGenRef.current) return;
 
         await seekLiveIfNeeded(player, video);
+
+        // Re-apply persisted aspect ratio after each load (channel switch must not reset it)
+        applyAspectRatio(containerRef.current, getStoredAspectRatio());
 
         if (autoPlay) {
           try {
@@ -461,13 +519,59 @@ const Player = ({
 
   const errorMessage = error ? formatShakaError(error) : null;
 
+  // Include aspect class in React className so re-renders (loading, errors, channel
+  // switch) do not wipe the mode applied via classList / localStorage.
+  const aspectClass = `aspect-${getStoredAspectRatio()}`;
+  const showChannelChrome = Boolean(channelName || channelLogo);
+  const showLogoImg = Boolean(channelLogo) && !logoFailed;
+  const nameInitial = (channelName || '?').trim().charAt(0).toUpperCase() || '?';
+  const hue = ((channelName || '').charCodeAt(0) || 0) * 3;
+
+  const channelBanner =
+    showChannelChrome && bannerHost
+      ? createPortal(
+          <div className="player-channel-banner" aria-hidden="true">
+            <div className="player-channel-info">
+              <div
+                className={`player-channel-logo${showLogoImg ? ' has-image' : ''}`}
+                style={
+                  showLogoImg
+                    ? undefined
+                    : {
+                        background: `linear-gradient(135deg, hsl(${hue}, 60%, 45%) 0%, hsl(${hue + 40}, 50%, 35%) 100%)`,
+                      }
+                }
+              >
+                {showLogoImg ? (
+                  <img
+                    src={channelLogo}
+                    alt=""
+                    onError={() => setLogoFailed(true)}
+                  />
+                ) : (
+                  <span className="player-channel-logo-initial">{nameInitial}</span>
+                )}
+              </div>
+              {channelName ? (
+                <div className="player-channel-title" title={channelName}>
+                  {channelName}
+                </div>
+              ) : null}
+            </div>
+          </div>,
+          bannerHost
+        )
+      : null;
+
   return (
     <div
-      className={`video-container${loading ? ' is-loading' : ''}`}
+      className={`video-container ${aspectClass}${loading ? ' is-loading' : ''}`}
       ref={containerRef}
       onDoubleClick={handleDoubleClick}
       style={{ width: '100%', height: '100%', background: '#000', position: 'relative' }}
     >
+      {channelBanner}
+
       {/* Initial channel load only — Shaka owns mid-stream buffering spinner */}
       {loading && !error && (
         <div

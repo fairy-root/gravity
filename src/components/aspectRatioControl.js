@@ -15,9 +15,38 @@ const MODES = [
 
 const DEFAULT_MODE = 'original';
 
-/** Aspect-ratio icon (Material Symbols style, 960 grid) */
-const ASPECT_ICON_PATH =
-  'M200-120q-33 0-56.5-23.5T120-200v-560q0-33 23.5-56.5T200-840h560q33 0 56.5 23.5T840-760v560q0 33-23.5 56.5T760-120H200zm0-80h560v-560H200v560zm80-80h200v-80H280v80zm0-160h400v-80H280v80zm0-160h400v-80H280v80z';
+/**
+ * Custom aspect-ratio icon (24×24). Shaka SettingsMenu only takes a single
+ * Material path, so we inject this multi-path SVG after construction.
+ * Uses currentColor so it matches the control bar.
+ */
+const ASPECT_ICON_SVG = `
+  <path d="M4 6V12H6V8L10 8V6H4Z" fill="currentColor"/>
+  <path d="M20 18H14V16H18V12H20V18Z" fill="currentColor"/>
+  <path fill-rule="evenodd" clip-rule="evenodd" d="M4 2C1.79086 2 0 3.79086 0 6V18C0 20.2091 1.79086 22 4 22H20C22.2091 22 24 20.2091 24 18V6C24 3.79086 22.2091 2 20 2H4ZM20 4H4C2.89543 4 2 4.89543 2 6V18C2 19.1046 2.89543 20 4 20H20C21.1046 20 22 19.1046 22 18V6C22 4.89543 21.1046 4 20 4Z" fill="currentColor"/>
+`.trim();
+
+/** Placeholder path for SettingsMenu super() — replaced immediately */
+const ASPECT_ICON_PLACEHOLDER = 'M0 0h24v24H0z';
+
+/**
+ * Replace Shaka's single-path Material icon with our multi-path SVG.
+ * @param {HTMLElement|null} button
+ */
+function installAspectIcon(button) {
+  if (!button) return;
+  const svg = button.querySelector('svg');
+  if (!svg) return;
+  // Size is controlled in CSS (.shaka-aspect-ratio-button svg) so it
+  // matches other control icons (Shaka uses 1em @ 24px font-size).
+  svg.setAttribute('viewBox', '0 0 24 24');
+  svg.removeAttribute('width');
+  svg.removeAttribute('height');
+  svg.setAttribute('fill', 'none');
+  svg.setAttribute('aria-hidden', 'true');
+  svg.classList.add('shaka-aspect-ratio-icon');
+  svg.innerHTML = ASPECT_ICON_SVG;
+}
 
 let registered = false;
 
@@ -76,11 +105,12 @@ export function registerAspectRatioControl(shaka) {
      * @param {*} controls
      */
     constructor(parent, controls) {
-      super(parent, controls, ASPECT_ICON_PATH);
+      super(parent, controls, ASPECT_ICON_PLACEHOLDER);
 
       this.button.classList.add('shaka-aspect-ratio-button');
       this.button.classList.add('shaka-tooltip');
       this.menu.classList.add('shaka-aspect-ratio-menu');
+      installAspectIcon(this.button);
 
       this.nameSpan.textContent = 'Aspect Ratio';
       this.button.ariaLabel = 'Aspect Ratio';

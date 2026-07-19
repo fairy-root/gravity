@@ -381,6 +381,7 @@ function App() {
               authorization={activeConfig.authorization}
               headers={activeConfig.headers}
               channelName={activeConfig.name}
+              channelLogo={activeConfig.logo}
               autoPlay={true}
             />
           ) : (

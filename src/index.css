@@ -417,6 +417,116 @@ video {
   display: none !important;
 }
 
+/* ---- Channel info banner (top drop-shadow; fades with Shaka UI) ---- */
+/* Host lives inside .shaka-controls-container so opacity tracks [shown] */
+.player-channel-banner-host {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 2;
+  pointer-events: none;
+}
+
+.player-channel-banner {
+  padding: 12px 12px 40px;
+  background: linear-gradient(
+    to bottom,
+    rgba(0, 0, 0, 0.78) 0%,
+    rgba(0, 0, 0, 0.42) 50%,
+    rgba(0, 0, 0, 0) 100%
+  );
+  /* Same fade as Shaka's control button panel / scrim */
+  opacity: 0;
+  transition: opacity cubic-bezier(0.4, 0, 0.6, 1) 0.6s;
+}
+
+.shaka-controls-container[shown] .player-channel-banner,
+.shaka-controls-container[shown='true'] .player-channel-banner,
+.shaka-controls-container[casting] .player-channel-banner {
+  opacity: 1;
+}
+
+.player-channel-info {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  max-width: min(72vw, 280px);
+  min-width: 0;
+}
+
+.player-channel-logo {
+  width: 72px;
+  height: 72px;
+  flex-shrink: 0;
+  border-radius: 12px;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.45);
+}
+
+.player-channel-logo.has-image {
+  background: rgba(20, 20, 24, 0.85);
+}
+
+.player-channel-logo img {
+  width: 88%;
+  height: 88%;
+  object-fit: contain;
+  display: block;
+}
+
+.player-channel-logo-initial {
+  font-size: 30px;
+  font-weight: 700;
+  color: #fff;
+  line-height: 1;
+  user-select: none;
+}
+
+.player-channel-title {
+  min-width: 0;
+  flex: 1;
+  color: #fff;
+  font-size: 1.8rem;
+  font-weight: 600;
+  line-height: 1.25;
+  letter-spacing: 0.01em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.85), 0 0 12px rgba(0, 0, 0, 0.4);
+}
+
+@media (max-width: 640px) {
+  .player-channel-banner {
+    padding: 10px 10px 32px;
+  }
+
+  .player-channel-info {
+    max-width: min(78vw, 220px);
+    gap: 12px;
+  }
+
+  .player-channel-logo {
+    width: 60px;
+    height: 60px;
+    border-radius: 10px;
+  }
+
+  .player-channel-logo-initial {
+    font-size: 26px;
+  }
+
+  .player-channel-title {
+    font-size: 1.6rem;
+  }
+}
+
 /* ---- Aspect ratio modes ---- */
 .video-container {
   overflow: hidden;
@@ -466,6 +576,15 @@ video {
 /* Aspect ratio control button & menu */
 .video-container .shaka-aspect-ratio-button {
   min-width: 48px;
+}
+
+/* Optically match other Shaka icons (glyph is thinner than Material symbols) */
+.video-container .shaka-aspect-ratio-button svg,
+.video-container .shaka-aspect-ratio-button .shaka-aspect-ratio-icon,
+.video-container .shaka-aspect-ratio-button .material-svg-icon {
+  width: 23px !important;
+  height: 23px !important;
+  font-size: 23px !important;
 }
 
 .video-container .shaka-aspect-ratio-menu {
