@@ -9,6 +9,7 @@ import {
   applyProxyRequestHeaders,
   applyDirectRequestHeaders,
   handleProxyHttpError,
+  handleDirectOriginBlockError,
   enrichDualFetchFailure,
   getShakaNetworkErrorInfo,
   isProxiedUrl,
@@ -365,10 +366,17 @@ const Player = ({
           uri: info.uri,
         });
 
-        // Medianova/Starz/Amazon: edge proxy IP blocked, but browser CORS may work.
-        // Mark host for direct fetch and retry once.
-        if (handleProxyHttpError(e)) {
-          console.warn('[Gravity] Proxy 403 — retrying direct (no edge proxy)…');
+        // Path A: edge proxy IP blocked (Starz/Medianova) → retry direct.
+        // Path B: direct browser Origin rejected (Amazon/aiv-cdn 400) → retry proxy.
+        const retryDirect = handleProxyHttpError(e);
+        const retryProxy = !retryDirect && handleDirectOriginBlockError(e);
+
+        if (retryDirect || retryProxy) {
+          console.warn(
+            retryDirect
+              ? '[Gravity] Proxy 403 — retrying direct (no edge proxy)…'
+              : '[Gravity] Direct HTTP 400 — retrying via edge proxy (strip Origin)…'
+          );
           setStatusText(channelName ? `Retrying ${channelName}…` : 'Retrying…');
           try {
             await tryLoad();
@@ -380,7 +388,7 @@ const Player = ({
           } catch (e2) {
             if (!mountedRef.current || gen !== loadGenRef.current) return;
             const dInfo = getShakaNetworkErrorInfo(e2);
-            console.error('[Gravity] Load failed (direct retry):', {
+            console.error('[Gravity] Load failed (retry):', {
               code: dInfo.code,
               http: dInfo.status,
               uri: dInfo.uri,

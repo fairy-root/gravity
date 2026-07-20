@@ -100,6 +100,13 @@ export const formatShakaError = (error) => {
         : 'HTTP 403 — CDN rejected the request. Set Referer / User-Agent / Authorization in Advanced Options, or refresh an expired token in the stream URL.';
     } else if (status === 401) {
       detail = 'HTTP 401 — unauthorized. Add Authorization (or Cookie) in Advanced Options.';
+    } else if (status === 400) {
+      const viaProxy =
+        typeof uri === 'string' &&
+        (uri.includes('/api/proxy/') || uri.startsWith('/api/proxy/'));
+      detail = viaProxy
+        ? 'HTTP 400 — CDN rejected the proxied request (bad URL, expired token, or missing header).'
+        : 'HTTP 400 — CDN rejected the browser request (often Origin-sensitive; Gravity retries via edge proxy).';
     } else if (status === 404) {
       detail = 'HTTP 404 — stream URL not found (expired link or bad path)';
     } else if (status === 405) {

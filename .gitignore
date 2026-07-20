@@ -37,3 +37,6 @@ Capture*.png
 presentation_*/
 
 # Keep docs screenshots tracked (do not ignore docs/)
+
+# Local Netlify folder
+.netlify

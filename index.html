@@ -6,10 +6,12 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="theme-color" content="#050505" />
     <!--
-      Do NOT use no-referrer: many CDNs require a Referer on direct browser
-      fetches. Channel-specific Referer still goes via the edge proxy headers.
+      no-referrer is required for Starz/Medianova direct fetches: those CDNs
+      403 when Referer is the Netlify app origin. Channel-specific Referer/UA
+      still apply via the edge proxy (X-Stream-*). Amazon/aiv-cdn must use the
+      proxy anyway (browser Origin alone causes HTTP 400 on those edges).
     -->
-    <meta name="referrer" content="strict-origin-when-cross-origin" />
+    <meta name="referrer" content="no-referrer" />
     <title>Gravity — Network Stream Player</title>
   </head>
   <body>

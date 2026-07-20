@@ -37,6 +37,11 @@ export const PROXY_HEADER = {
  * Hosts / suffixes that typically block Netlify edge IPs but allow browser
  * CORS. Requests go direct from the client instead of through /api/proxy.
  * Matched as exact host or suffix (e.g. starzplayarabia.com → *.starzplayarabia.com).
+ *
+ * Do NOT put Amazon/aiv-cdn or CloudFront here. Those CDNs often return HTTP 400
+ * when the browser sends Origin (which CORS always does). The edge proxy strips
+ * Origin and works. Starz/Medianova do the opposite: proxy IP is blocked, but
+ * browser direct works if the document does not send a foreign Referer.
  */
 const STATIC_PROXY_BYPASS_SUFFIXES = [
   'starzplayarabia.com',
@@ -45,15 +50,16 @@ const STATIC_PROXY_BYPASS_SUFFIXES = [
   'medianova.com',
   // Common MNCDN edge host patterns
   'mncdn.net',
-  // Amazon IVS / Prime-style edges often block datacenter/Netlify IPs (403 via proxy)
-  'aiv-cdn.net',
-  'aiv-cdn.com.tw',
-  'media-amazon.com',
-  'cloudfront.net',
 ];
 
-/** Session-learned hosts that returned 403 via proxy (auto-bypass). */
+/** Session-learned hosts that returned 403 via proxy (auto-bypass → direct). */
 const sessionBypassHosts = new Set();
+
+/**
+ * Session-learned hosts that fail on direct browser fetch (e.g. Amazon 400 on
+ * Origin) and must use the edge proxy even if they were previously bypassed.
+ */
+const sessionForceProxyHosts = new Set();
 
 function envFlag(name) {
   try {
@@ -102,6 +108,20 @@ function hostMatchesSuffix(hostname, suffix) {
 }
 
 /**
+ * Normalize uri-or-host input to a lowercase hostname.
+ * @param {string} uriOrHost
+ * @returns {string|null}
+ */
+function resolveHost(uriOrHost) {
+  if (!uriOrHost) return null;
+  let host = String(uriOrHost).toLowerCase();
+  if (host.includes('/') || host.includes(':')) {
+    host = extractStreamHost(uriOrHost);
+  }
+  return host || null;
+}
+
+/**
  * Whether this specific URI should skip the edge proxy (direct browser fetch).
  * @param {string} uri
  * @returns {boolean}
@@ -112,6 +132,9 @@ export function shouldBypassProxy(uri) {
 
   const host = extractStreamHost(uri);
   if (!host) return false;
+
+  // Learned Origin-sensitive hosts always use the proxy
+  if (sessionForceProxyHosts.has(host)) return false;
 
   if (sessionBypassHosts.has(host)) return true;
 
@@ -124,15 +147,28 @@ export function shouldBypassProxy(uri) {
  * @param {string} uriOrHost
  */
 export function markProxyBypass(uriOrHost) {
-  if (!uriOrHost) return;
-  let host = uriOrHost.toLowerCase();
-  if (host.includes('/') || host.includes(':')) {
-    host = extractStreamHost(uriOrHost);
-  }
+  const host = resolveHost(uriOrHost);
   if (!host) return;
+  // Do not bypass hosts we already know need the proxy (Origin-sensitive)
+  if (sessionForceProxyHosts.has(host)) return;
   if (!sessionBypassHosts.has(host)) {
     sessionBypassHosts.add(host);
     console.info(`[Gravity] CDN blocks edge proxy — using direct fetch for ${host}`);
+  }
+}
+
+/**
+ * Remember that direct browser fetch fails for this host (typically HTTP 400
+ * when Origin is present). Future requests go through the edge proxy.
+ * @param {string} uriOrHost
+ */
+export function markForceProxy(uriOrHost) {
+  const host = resolveHost(uriOrHost);
+  if (!host) return;
+  sessionBypassHosts.delete(host);
+  if (!sessionForceProxyHosts.has(host)) {
+    sessionForceProxyHosts.add(host);
+    console.info(`[Gravity] CDN rejects browser Origin — forcing edge proxy for ${host}`);
   }
 }
 
@@ -257,28 +293,55 @@ export function handleProxyHttpError(error) {
 }
 
 /**
+ * If a direct (non-proxy) fetch fails with HTTP 400, force the edge proxy.
+ * Amazon/aiv-cdn and similar edges reject requests that include a browser Origin.
+ * @param {object} error Shaka error-like
+ * @returns {boolean} true if we should retry through the proxy
+ */
+export function handleDirectOriginBlockError(error) {
+  if (!error || error.code !== 1001) return false;
+  const { uri, status } = getShakaNetworkErrorInfo(error);
+  if (status !== 400 || !uri) return false;
+
+  // Only act on direct CDN URLs — proxied 400s are a different problem
+  if (isProxiedUrl(uri) || uri.includes('/api/proxy/')) return false;
+
+  markForceProxy(uri);
+  return true;
+}
+
+/**
  * Build a clearer dual-failure message after proxy 403 + direct retry both fail.
  * @param {object} proxyError
  * @param {object} directError
  * @returns {object} error-like with improved message for the UI
  */
-export function enrichDualFetchFailure(proxyError, directError) {
-  const p = getShakaNetworkErrorInfo(proxyError);
-  const d = getShakaNetworkErrorInfo(directError);
-  const host = extractStreamHost(d.uri || p.uri) || 'CDN';
+export function enrichDualFetchFailure(firstError, secondError) {
+  const a = getShakaNetworkErrorInfo(firstError);
+  const b = getShakaNetworkErrorInfo(secondError);
+  const host = extractStreamHost(b.uri || a.uri) || 'CDN';
+
+  const firstProxied =
+    typeof a.uri === 'string' &&
+    (isProxiedUrl(a.uri) || a.uri.includes('/api/proxy/'));
+  const proxyStatus = firstProxied ? a.status : b.status;
+  const directStatus = firstProxied ? b.status : a.status;
+  const directCode = firstProxied ? b.code : a.code;
 
   const msg =
     `Stream blocked both ways for ${host}. ` +
-    `Edge proxy HTTP ${p.status ?? '?'} (datacenter IP often blocked); ` +
-    `direct browser HTTP ${d.status ?? d.code ?? '?'}` +
-    (d.status === 403
+    `Edge proxy HTTP ${proxyStatus ?? '?'} (datacenter IP often blocked); ` +
+    `direct browser HTTP ${directStatus ?? directCode ?? '?'}` +
+    (directStatus === 403
       ? ' (CDN rejected — set Referer / User-Agent / Authorization in Advanced Options, or the link needs a fresh token).'
-      : d.code === 1002
-        ? ' (network/CORS — CDN may not allow this site origin).'
-        : '.') +
-    ' Tip: many Amazon/Prime-style CDNs need a valid token in the URL and a matching Referer.';
+      : directStatus === 400
+        ? ' (HTTP 400 — often Origin-sensitive CDN; ensure the stream proxy is deployed on this host).'
+        : directCode === 1002
+          ? ' (network/CORS — CDN may not allow this site origin).'
+          : '.') +
+    ' Tip: Amazon/aiv-cdn needs the edge proxy (strips Origin); Starz/Medianova need direct fetch with no-referrer.';
 
-  const err = directError || proxyError || {};
+  const err = secondError || firstError || {};
   return {
     ...err,
     message: msg,
@@ -287,8 +350,8 @@ export function enrichDualFetchFailure(proxyError, directError) {
     severity: err.severity,
     category: err.category,
     gravityDualFail: true,
-    gravityProxyStatus: p.status,
-    gravityDirectStatus: d.status,
+    gravityProxyStatus: proxyStatus,
+    gravityDirectStatus: directStatus,
   };
 }
 
@@ -354,23 +417,22 @@ export function applyDirectRequestHeaders(request, channel = {}) {
 
   const resolved = resolveStreamHeaders(channel);
 
-  if (resolved.referrer) {
-    request.headers['Referer'] = resolved.referrer;
-  }
-
-  // Origin is often forbidden on browser fetch; still set when allowed by Shaka/engine
-  if (resolved.origin) {
-    request.headers['Origin'] = resolved.origin;
-  }
+  // Browsers forbid setting User-Agent, Referer, and Origin on fetch/XHR.
+  // Document referrer policy controls Referer (we use no-referrer so Starz
+  // is not 403'd by a Netlify Referer). Channel Referer/UA/Origin only work
+  // reliably via the edge proxy — do not inject forbidden headers here.
 
   if (resolved.authHeader) {
+    // Skip Authorization if the name is a forbidden header (it isn't)
     request.headers[resolved.authHeader.name] = resolved.authHeader.value;
   }
 
   Object.entries(resolved.customHeaders || {}).forEach(([k, v]) => {
     if (!k || v == null) return;
-    // Browser forbids setting User-Agent on fetch/XHR
+    // Browser forbids these on fetch/XHR; setting them can break CORS preflight
     if (/^user-agent$/i.test(k)) return;
+    if (/^referer$/i.test(k) || /^referrer$/i.test(k)) return;
+    if (/^origin$/i.test(k)) return;
     request.headers[k] = String(v);
   });
 }
