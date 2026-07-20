@@ -166,6 +166,7 @@ You need an equivalent reverse proxy for blocked Origins; a static-only deploy w
 | Feature            | Status | Notes                                      |
 |--------------------|--------|--------------------------------------------|
 | DASH / HLS         | ✅     | Via Shaka Player                           |
+| HDR / HDR10 / HLG  | ✅     | Preferred when display + stream support it |
 | ClearKey           | ✅     | Works in modern browsers                   |
 | Widevine           | ⚠️     | Needs HTTPS + license server               |
 | PlayReady          | ⚠️     | Limited browser support                    |

@@ -584,41 +584,19 @@ video {
   object-position: center center;
 }
 
-/* Aspect ratio control button & menu */
+/* Aspect ratio control — single button, cycles Fill → Fill Width → Original */
 .video-container .shaka-aspect-ratio-button {
   min-width: 48px;
+  cursor: pointer;
 }
 
 /* Optically match other Shaka icons (glyph is thinner than Material symbols) */
 .video-container .shaka-aspect-ratio-button svg,
-.video-container .shaka-aspect-ratio-button .shaka-aspect-ratio-icon,
-.video-container .shaka-aspect-ratio-button .material-svg-icon {
+.video-container .shaka-aspect-ratio-button .shaka-aspect-ratio-icon {
   width: 23px !important;
   height: 23px !important;
   font-size: 23px !important;
-}
-
-.video-container .shaka-aspect-ratio-menu {
-  min-width: 160px;
-}
-
-.video-container .shaka-aspect-option {
-  display: flex !important;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  width: 100%;
-  text-align: left;
-}
-
-.video-container .shaka-aspect-option .shaka-chosen-item {
-  font-weight: 600;
-}
-
-.video-container .shaka-aspect-check {
-  opacity: 0.9;
-  font-size: 14px;
-  margin-left: auto;
+  pointer-events: none;
 }
 
 /* List View Hover */

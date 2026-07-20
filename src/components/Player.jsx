@@ -11,6 +11,7 @@ import {
   handleProxyHttpError,
   isProxiedUrl,
 } from '../utils/streamProxy';
+import { getHdrPlayerConfig, logHdrTrackInfo, supportsHdrDisplay } from '../utils/hdrSupport';
 import {
   registerAspectRatioControl,
   applyAspectRatio,
@@ -169,9 +170,16 @@ const Player = ({
 
   const buildPlayerConfig = useCallback((stream) => {
     const drm = buildDrmConfig(stream);
+    const hdr = getHdrPlayerConfig();
 
     return {
       drm,
+      // HDR10 (PQ), HLG, Dolby Vision when the channel + display support them
+      preferredVideoHdrLevel: hdr.preferredVideoHdrLevel,
+      preferredVideoCodecs: hdr.preferredVideoCodecs,
+      preferSpatialAudio: hdr.preferSpatialAudio,
+      abr: hdr.abr,
+      restrictions: hdr.restrictions,
       cmcd: {
         enabled: false,
       },
@@ -239,6 +247,50 @@ const Player = ({
     }
   }, []);
 
+  /**
+   * If the display is HDR-capable and the manifest has PQ/HLG/HDR tracks,
+   * nudge ABR toward the highest playable HDR variant (bandwidth permitting).
+   */
+  const preferHdrVariantIfAvailable = useCallback((player) => {
+    if (!player || !supportsHdrDisplay()) return;
+    try {
+      const tracks = player.getVariantTracks?.() || [];
+      if (!tracks.length) return;
+
+      const isHdr = (t) => {
+        const h = (t.hdr || '').toString().toUpperCase();
+        return h === 'PQ' || h === 'HLG' || h === 'HDR' || h === 'HDR10' || h === 'HDR10+' || h === 'DV';
+      };
+
+      const hdrTracks = tracks.filter(isHdr);
+      logHdrTrackInfo(player);
+      if (!hdrTracks.length) return;
+
+      const active = tracks.find((t) => t.active);
+      if (active && isHdr(active)) return;
+
+      // Highest resolution / bandwidth HDR track that is still allowed
+      const best = [...hdrTracks].sort((a, b) => {
+        const ph = (a.height || 0) * (a.width || 0);
+        const qh = (b.height || 0) * (b.width || 0);
+        if (qh !== ph) return qh - ph;
+        return (b.bandwidth || 0) - (a.bandwidth || 0);
+      })[0];
+
+      if (best && !best.active) {
+        player.selectVariantTrack(best, /* clearBuffer= */ false);
+        console.info(
+          '[Gravity] Selected HDR variant:',
+          best.hdr,
+          `${best.height || '?'}p`,
+          best.codecs || ''
+        );
+      }
+    } catch (e) {
+      console.warn('[Gravity] HDR track selection skipped:', e);
+    }
+  }, []);
+
   const loadStream = useCallback(
     async (gen) => {
       const player = playerRef.current;
@@ -278,6 +330,9 @@ const Player = ({
         if (!mountedRef.current || gen !== loadGenRef.current) return;
 
         await seekLiveIfNeeded(player, video);
+
+        // Prefer an HDR/HDR10/HLG variant when the display and stream support it
+        preferHdrVariantIfAvailable(player);
 
         // Re-apply persisted aspect ratio after each load (channel switch must not reset it)
         applyAspectRatio(containerRef.current, getStoredAspectRatio());
@@ -339,6 +394,7 @@ const Player = ({
       applyNetworkingFilter,
       buildPlayerConfig,
       seekLiveIfNeeded,
+      preferHdrVariantIfAvailable,
     ]
   );
 
@@ -432,6 +488,10 @@ const Player = ({
           '[Gravity] Stream proxy enabled (hosted origin). CDNs that block edge IPs (e.g. Starz/Medianova) use direct fetch.'
         );
       }
+      console.info(
+        '[Gravity] HDR display support:',
+        supportsHdrDisplay() ? 'yes (HDR/HDR10/HLG tracks allowed)' : 'no (prefer SDR variants)'
+      );
 
       setPlayerReady(true);
     };
