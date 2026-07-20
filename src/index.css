@@ -599,6 +599,31 @@ video {
   pointer-events: none;
 }
 
+/*
+ * Shaka tooltips use :hover/:active pseudo-elements. On touch devices,
+ * :hover sticks after tap so labels (aspect mode, Full screen, etc.) stay
+ * on screen. Hide control-panel tooltips on coarse pointers / no-hover.
+ */
+@media (hover: none), (pointer: coarse) {
+  .video-container .shaka-tooltips-on > .shaka-tooltip:hover:after,
+  .video-container .shaka-tooltips-on > .shaka-tooltip:focus-visible:after,
+  .video-container .shaka-tooltips-on > .shaka-tooltip:active:after,
+  .video-container .shaka-tooltips-on > .shaka-tooltip-status:hover:after,
+  .video-container .shaka-tooltips-on > .shaka-tooltip-status:focus-visible:after,
+  .video-container .shaka-tooltips-on > .shaka-tooltip-status:active:after {
+    content: none !important;
+    display: none !important;
+  }
+}
+
+/* Never show a status bubble on the aspect button (even on desktop hover) */
+.video-container .shaka-aspect-ratio-button:hover:after,
+.video-container .shaka-aspect-ratio-button:focus-visible:after,
+.video-container .shaka-aspect-ratio-button:active:after {
+  content: none !important;
+  display: none !important;
+}
+
 /* List View Hover */
 .list-item-hover:hover {
   border-color: var(--border-light);

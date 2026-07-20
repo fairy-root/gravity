@@ -91,14 +91,6 @@ export function nextAspectRatioMode(current) {
 }
 
 /**
- * @param {string} mode
- * @returns {string}
- */
-function modeLabel(mode) {
-  return MODES.find((m) => m.id === mode)?.label || 'Original';
-}
-
-/**
  * Register the custom control with Shaka (idempotent).
  * Simple button — each click advances Fill → Fill Width → Original.
  * @param {*} shaka
@@ -125,7 +117,8 @@ export function registerAspectRatioControl(shaka) {
       this.button = document.createElement('button');
       this.button.type = 'button';
       this.button.classList.add('shaka-aspect-ratio-button');
-      this.button.classList.add('shaka-tooltip');
+      // No shaka-tooltip / shaka-status — those stick as :hover text on mobile
+      this.button.setAttribute('aria-label', 'Aspect ratio');
       this.button.appendChild(createAspectIcon());
 
       this.parent.appendChild(this.button);
@@ -145,13 +138,6 @@ export function registerAspectRatioControl(shaka) {
           /* ignore */
         }
         this.cycleMode_();
-      });
-
-      this.eventManager.listen(this.localization, 'locale-updated', () => {
-        this.refreshLabel_();
-      });
-      this.eventManager.listen(this.localization, 'locale-changed', () => {
-        this.refreshLabel_();
       });
     }
 
@@ -179,17 +165,8 @@ export function registerAspectRatioControl(shaka) {
       }
       applyAspectRatio(this.containerEl_, resolved);
       setStoredAspectRatio(resolved);
-      this.refreshLabel_();
-    }
-
-    /** @private */
-    refreshLabel_() {
-      const mode = getStoredAspectRatio();
-      const label = modeLabel(mode);
-      // Tooltip / a11y: show current mode and that click cycles
-      this.button.setAttribute('shaka-status', label);
-      this.button.setAttribute('aria-label', `Aspect ratio: ${label}. Click to change.`);
-      this.button.setAttribute('title', `Aspect: ${label}`);
+      // Keep a static a11y label only — no status/tooltip text (sticky on touch)
+      this.button.setAttribute('aria-label', 'Aspect ratio');
     }
   }
 

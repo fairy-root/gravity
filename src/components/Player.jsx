@@ -442,6 +442,15 @@ const Player = ({
 
       ui = new shaka.ui.Overlay(player, container, video);
 
+      // Tooltips stick after tap on touch devices (:hover never clears) — only
+      // enable on fine-pointer hover environments (desktop mouse).
+      let enableTooltips = true;
+      try {
+        enableTooltips = window.matchMedia('(hover: hover) and (pointer: fine)').matches;
+      } catch {
+        enableTooltips = true;
+      }
+
       ui.configure({
         controlPanelElements: [
           'play_pause',
@@ -456,7 +465,7 @@ const Player = ({
         overflowMenuButtons: ['quality', 'language', 'playback_rate', 'captions'],
         doubleClickForFullscreen: true,
         enableFullscreenOnRotation: true,
-        enableTooltips: true,
+        enableTooltips,
         seekBarColors: {
           base: 'rgba(255,255,255,0.25)',
           buffered: 'rgba(255,255,255,0.45)',
