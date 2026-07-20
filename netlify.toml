@@ -1,8 +1,16 @@
+# Gravity - Netlify build + edge stream proxy
+# Keep this file ASCII-only. Publish dir is "dist"; do not set Base directory
+# in the Netlify UI to "dist" (base is the source root, not the output folder).
+
 [build]
   command = "npm run build"
   publish = "dist"
 
-# Stream proxy — bypasses CDN Origin blocks (403 from netlify.app / custom domains)
+[build.environment]
+  NODE_VERSION = "22"
+
+# Edge stream proxy: same-origin fetch so CDNs never see netlify.app Origin.
+# Implementation: netlify/edge-functions/stream-proxy.js
 [[edge_functions]]
   function = "stream-proxy"
   path = "/api/proxy/*"
