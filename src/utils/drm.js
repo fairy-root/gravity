@@ -77,6 +77,11 @@ export const buildDrmConfig = ({ drmScheme, clearKeys, licenseUrl } = {}) => {
 export const formatShakaError = (error) => {
   if (!error) return 'Unknown error';
 
+  // Prefer dual-fail message built after proxy 403 + direct retry
+  if (error.gravityDualFail && error.message) {
+    return error.message;
+  }
+
   const code = error.code;
   const data = error.data || [];
   const uri = typeof data[0] === 'string' ? data[0] : null;
@@ -91,8 +96,10 @@ export const formatShakaError = (error) => {
         typeof uri === 'string' &&
         (uri.includes('/api/proxy/') || uri.startsWith('/api/proxy/'));
       detail = viaProxy
-        ? 'HTTP 403 — CDN blocked the edge proxy (datacenter IP). Gravity will retry direct; if this persists, the stream may need a token/Referer or only works from certain regions.'
-        : 'HTTP 403 — CDN rejected the request. Set Referer / User-Agent on the channel if required.';
+        ? 'HTTP 403 — CDN blocked the edge proxy (datacenter IP). Gravity retries direct; if this persists, set Referer/User-Agent/Authorization or use a fresh tokenized URL.'
+        : 'HTTP 403 — CDN rejected the request. Set Referer / User-Agent / Authorization in Advanced Options, or refresh an expired token in the stream URL.';
+    } else if (status === 401) {
+      detail = 'HTTP 401 — unauthorized. Add Authorization (or Cookie) in Advanced Options.';
     } else if (status === 404) {
       detail = 'HTTP 404 — stream URL not found (expired link or bad path)';
     } else if (status === 405) {
@@ -107,7 +114,6 @@ export const formatShakaError = (error) => {
         // Prefer unwrapped CDN URL for readability
         let display = uri;
         try {
-          // dynamic import path avoided — unwrap inline
           const u = new URL(uri, typeof window !== 'undefined' ? window.location.origin : 'http://local');
           const m = u.pathname.match(/^\/api\/proxy\/(https?)\/(.+)$/);
           if (m) display = `${m[1]}://${m[2]}${u.search}`;
@@ -122,7 +128,8 @@ export const formatShakaError = (error) => {
       }
     }
   } else if (code === 1002) {
-    detail = 'Network error (connection failed or CORS blocked)';
+    detail =
+      'Network error (connection failed or CORS blocked). The CDN may not allow this site’s origin — try localhost, or a host that supports the stream proxy.';
   } else if (code === 1003) {
     detail = 'Request timed out';
   } else if (code === 4012 || code === 4032) {

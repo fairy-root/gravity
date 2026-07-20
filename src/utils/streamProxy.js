@@ -45,6 +45,11 @@ const STATIC_PROXY_BYPASS_SUFFIXES = [
   'medianova.com',
   // Common MNCDN edge host patterns
   'mncdn.net',
+  // Amazon IVS / Prime-style edges often block datacenter/Netlify IPs (403 via proxy)
+  'aiv-cdn.net',
+  'aiv-cdn.com.tw',
+  'media-amazon.com',
+  'cloudfront.net',
 ];
 
 /** Session-learned hosts that returned 403 via proxy (auto-bypass). */
@@ -220,15 +225,28 @@ export function unwrapStreamUrl(uri) {
 }
 
 /**
+ * Pull uri + HTTP status from a Shaka network error (code 1001/1002/…).
+ * @param {object} error
+ * @returns {{ uri: string|null, status: number|null, code: number|null }}
+ */
+export function getShakaNetworkErrorInfo(error) {
+  if (!error) return { uri: null, status: null, code: null };
+  const data = error.data || [];
+  return {
+    code: typeof error.code === 'number' ? error.code : null,
+    uri: typeof data[0] === 'string' ? data[0] : null,
+    status: typeof data[1] === 'number' ? data[1] : null,
+  };
+}
+
+/**
  * If a Shaka network error is a proxy 403, mark the host for direct fetch.
  * @param {object} error Shaka error-like
  * @returns {boolean} true if this looks like a proxy-edge 403 worth retrying direct
  */
 export function handleProxyHttpError(error) {
   if (!error || error.code !== 1001) return false;
-  const data = error.data || [];
-  const uri = typeof data[0] === 'string' ? data[0] : null;
-  const status = typeof data[1] === 'number' ? data[1] : null;
+  const { uri, status } = getShakaNetworkErrorInfo(error);
   if (status !== 403 || !uri) return false;
 
   // Only treat as edge-block if we actually went through the proxy
@@ -236,6 +254,42 @@ export function handleProxyHttpError(error) {
 
   markProxyBypass(uri);
   return true;
+}
+
+/**
+ * Build a clearer dual-failure message after proxy 403 + direct retry both fail.
+ * @param {object} proxyError
+ * @param {object} directError
+ * @returns {object} error-like with improved message for the UI
+ */
+export function enrichDualFetchFailure(proxyError, directError) {
+  const p = getShakaNetworkErrorInfo(proxyError);
+  const d = getShakaNetworkErrorInfo(directError);
+  const host = extractStreamHost(d.uri || p.uri) || 'CDN';
+
+  const msg =
+    `Stream blocked both ways for ${host}. ` +
+    `Edge proxy HTTP ${p.status ?? '?'} (datacenter IP often blocked); ` +
+    `direct browser HTTP ${d.status ?? d.code ?? '?'}` +
+    (d.status === 403
+      ? ' (CDN rejected — set Referer / User-Agent / Authorization in Advanced Options, or the link needs a fresh token).'
+      : d.code === 1002
+        ? ' (network/CORS — CDN may not allow this site origin).'
+        : '.') +
+    ' Tip: many Amazon/Prime-style CDNs need a valid token in the URL and a matching Referer.';
+
+  const err = directError || proxyError || {};
+  return {
+    ...err,
+    message: msg,
+    code: err.code,
+    data: err.data,
+    severity: err.severity,
+    category: err.category,
+    gravityDualFail: true,
+    gravityProxyStatus: p.status,
+    gravityDirectStatus: d.status,
+  };
 }
 
 /**

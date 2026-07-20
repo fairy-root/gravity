@@ -5,7 +5,11 @@
     <link rel="icon" type="image/svg+xml" href="/vite.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="theme-color" content="#050505" />
-    <meta name="referrer" content="no-referrer" />
+    <!--
+      Do NOT use no-referrer: many CDNs require a Referer on direct browser
+      fetches. Channel-specific Referer still goes via the edge proxy headers.
+    -->
+    <meta name="referrer" content="strict-origin-when-cross-origin" />
     <title>Gravity — Network Stream Player</title>
   </head>
   <body>

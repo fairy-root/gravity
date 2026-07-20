@@ -9,6 +9,8 @@ import {
   applyProxyRequestHeaders,
   applyDirectRequestHeaders,
   handleProxyHttpError,
+  enrichDualFetchFailure,
+  getShakaNetworkErrorInfo,
   isProxiedUrl,
 } from '../utils/streamProxy';
 import { getHdrPlayerConfig, logHdrTrackInfo, supportsHdrDisplay } from '../utils/hdrSupport';
@@ -356,7 +358,14 @@ const Player = ({
       } catch (e) {
         if (!mountedRef.current || gen !== loadGenRef.current) return;
 
-        // Medianova/Starz-style: edge proxy IP blocked, but browser CORS works.
+        const info = getShakaNetworkErrorInfo(e);
+        console.warn('[Gravity] Load error detail:', {
+          code: info.code,
+          http: info.status,
+          uri: info.uri,
+        });
+
+        // Medianova/Starz/Amazon: edge proxy IP blocked, but browser CORS may work.
         // Mark host for direct fetch and retry once.
         if (handleProxyHttpError(e)) {
           console.warn('[Gravity] Proxy 403 — retrying direct (no edge proxy)…');
@@ -370,15 +379,26 @@ const Player = ({
             return;
           } catch (e2) {
             if (!mountedRef.current || gen !== loadGenRef.current) return;
-            console.error('[Gravity] Load failed (direct retry):', e2);
-            setError(e2);
+            const dInfo = getShakaNetworkErrorInfo(e2);
+            console.error('[Gravity] Load failed (direct retry):', {
+              code: dInfo.code,
+              http: dInfo.status,
+              uri: dInfo.uri,
+              error: e2,
+            });
+            setError(enrichDualFetchFailure(e, e2));
             setLoading(false);
             setStatusText('');
             return;
           }
         }
 
-        console.error('[Gravity] Load failed:', e);
+        console.error('[Gravity] Load failed:', {
+          code: info.code,
+          http: info.status,
+          uri: info.uri,
+          error: e,
+        });
         setError(e);
         setLoading(false);
         setStatusText('');
@@ -708,8 +728,11 @@ const Player = ({
         ref={videoRef}
         className="shaka-video"
         style={{ width: '100%', height: '100%' }}
-        autoPlay={autoPlay}
+        // Do not set the autoPlay attribute — Firefox may try to treat the
+        // manifest MIME as a native source ("No decoders for application/dash+xml").
+        // We call video.play() only after a successful Shaka load.
         playsInline
+        preload="metadata"
       />
     </div>
   );
