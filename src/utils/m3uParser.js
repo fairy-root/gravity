@@ -12,12 +12,14 @@ const emptyItem = () => ({
   headers: {},
   userAgent: '',
   referrer: '',
+  origin: '',
   authorization: '',
 });
 
 const emptyPendingOpts = () => ({
   userAgent: '',
   referrer: '',
+  origin: '',
   authorization: '',
   headers: {},
 });
@@ -40,6 +42,11 @@ const stripQuotes = (value) => {
  *   #EXTVLCOPT:http-user-agent="Mozilla/5.0 ..."
  *   #EXTVLCOPT:http-user-agent=
  *   #EXTVLCOPT:http-referrer=https://example.com/
+ *   #EXTVLCOPT:http-referrer=
+ *   #EXTVLCOPT:http-origin=https://example.com
+ *   #EXTVLCOPT:http-origin=
+ *
+ * Empty values are intentionally ignored so defaults / other sources can apply.
  */
 const applyVlcOpt = (target, propRaw) => {
   if (!target || propRaw == null) return;
@@ -53,7 +60,8 @@ const applyVlcOpt = (target, propRaw) => {
   // Keep everything after the first '=' (UA strings may contain '=')
   const value = stripQuotes(prop.slice(eq + 1));
 
-  // Empty value (e.g. http-user-agent=) → leave unset so default UA applies
+  // Empty value (e.g. http-user-agent= / http-referrer= / http-origin=)
+  // → leave unset so defaults or other headers can apply
   if (!value) return;
 
   if (
@@ -72,6 +80,11 @@ const applyVlcOpt = (target, propRaw) => {
     key === 'referer'
   ) {
     target.referrer = value;
+    return;
+  }
+
+  if (key === 'http-origin' || key === 'origin') {
+    target.origin = value;
   }
 };
 
@@ -79,6 +92,7 @@ const applyPendingOpts = (item, pending) => {
   if (!item || !pending) return;
   if (pending.userAgent && !item.userAgent) item.userAgent = pending.userAgent;
   if (pending.referrer && !item.referrer) item.referrer = pending.referrer;
+  if (pending.origin && !item.origin) item.origin = pending.origin;
   if (pending.authorization && !item.authorization) {
     item.authorization = pending.authorization;
   }
@@ -162,6 +176,7 @@ const applyKodiProp = (item, key, value) => {
       if (!hv) return;
       if (/^user-agent$/i.test(hk)) item.userAgent = hv;
       else if (/^referer$/i.test(hk) || /^referrer$/i.test(hk)) item.referrer = hv;
+      else if (/^origin$/i.test(hk)) item.origin = hv;
       else if (/^authorization$/i.test(hk)) item.authorization = hv;
       else item.headers[hk] = hv;
     });
@@ -212,6 +227,7 @@ export const parseM3U = (content) => {
           const val = String(hv);
           if (/^user-agent$/i.test(hk)) currentItem.userAgent = val;
           else if (/^referer$/i.test(hk) || /^referrer$/i.test(hk)) currentItem.referrer = val;
+          else if (/^origin$/i.test(hk)) currentItem.origin = val;
           else if (/^authorization$/i.test(hk)) currentItem.authorization = val;
           else currentItem.headers[hk] = val;
         });

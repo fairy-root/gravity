@@ -30,6 +30,7 @@ const hasAdvancedValues = (config) =>
   Boolean(
     (config.userAgent && String(config.userAgent).trim()) ||
       (config.referrer && String(config.referrer).trim()) ||
+      (config.origin && String(config.origin).trim()) ||
       (config.authorization && String(config.authorization).trim()) ||
       (config.headers && Object.keys(config.headers).length > 0)
   );
@@ -375,6 +376,19 @@ https://stream.url/manifest.mpd`}
                   onChange={handleChange}
                   placeholder="https://example.com/"
                 />
+              </div>
+              <div className="form-group">
+                <label>Origin</label>
+                <input
+                  type="text"
+                  name="origin"
+                  value={config.origin || ''}
+                  onChange={handleChange}
+                  placeholder="https://example.com"
+                />
+                <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>
+                  Optional. From M3U <code>#EXTVLCOPT:http-origin=</code>, or derived from Referrer when empty.
+                </span>
               </div>
               <div className="form-group">
                 <label>Authorization</label>

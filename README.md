@@ -58,8 +58,8 @@ https://stream.example.com/index.mpd
 ```
 
 Also supports:
-- `#EXTVLCOPT:http-user-agent=...` / `#EXTVLCOPT:http-referrer=...`
-- `#EXTHTTP:{"User-Agent":"..."}`
+- `#EXTVLCOPT:http-user-agent=...` / `#EXTVLCOPT:http-referrer=...` / `#EXTVLCOPT:http-origin=...` (empty values ignored)
+- `#EXTHTTP:{"User-Agent":"...","Origin":"..."}`
 - ClearKey as `kid:key` or `kid:key,kid2:key2` (UUID dashes allowed)
 
 ## Requirements

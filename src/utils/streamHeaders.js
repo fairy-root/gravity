@@ -1,7 +1,7 @@
 /**
  * Stream request header helpers.
  *
- * Advanced channel options (userAgent, referrer, authorization, headers)
+ * Advanced channel options (userAgent, referrer, origin, authorization, headers)
  * are primary and override defaults when set.
  */
 
@@ -89,12 +89,14 @@ export function normalizeHeadersMap(headers) {
  * @param {{
  *   userAgent?: string,
  *   referrer?: string,
+ *   origin?: string,
  *   authorization?: string,
  *   headers?: object|Array
  * }} channel
  * @returns {{
  *   userAgent: string,
  *   referrer: string,
+ *   origin: string,
  *   authHeader: { name: string, value: string }|null,
  *   customHeaders: Record<string, string>
  * }}
@@ -119,6 +121,18 @@ export function resolveStreamHeaders(channel = {}) {
     '';
   const resolvedReferrer = dedicatedReferrer || (mapReferrer && String(mapReferrer).trim()) || '';
 
+  // Origin: dedicated field → headers map → derived from referrer URL
+  const dedicatedOrigin = channel.origin && String(channel.origin).trim();
+  const mapOrigin = customHeaders['Origin'] || customHeaders['origin'] || '';
+  let resolvedOrigin = dedicatedOrigin || (mapOrigin && String(mapOrigin).trim()) || '';
+  if (!resolvedOrigin && resolvedReferrer) {
+    try {
+      resolvedOrigin = new URL(resolvedReferrer).origin;
+    } catch {
+      /* referrer is not a full URL */
+    }
+  }
+
   // Dedicated authorization field is primary; map Authorization only if field empty
   let authHeader = parseAuthorizationField(channel.authorization);
   if (!authHeader) {
@@ -134,12 +148,14 @@ export function resolveStreamHeaders(channel = {}) {
   Object.keys(cleaned).forEach((k) => {
     if (/^user-agent$/i.test(k)) delete cleaned[k];
     if (/^referer$/i.test(k) || /^referrer$/i.test(k)) delete cleaned[k];
+    if (/^origin$/i.test(k)) delete cleaned[k];
     if (/^authorization$/i.test(k)) delete cleaned[k];
   });
 
   return {
     userAgent: resolvedUa,
     referrer: resolvedReferrer,
+    origin: resolvedOrigin,
     authHeader,
     customHeaders: cleaned,
   };

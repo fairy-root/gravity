@@ -34,6 +34,7 @@ const Player = ({
   licenseUrl,
   userAgent,
   referrer,
+  origin,
   authorization,
   headers,
   autoPlay = false,
@@ -107,8 +108,8 @@ const Player = ({
   }, [playerReady]);
 
   // Latest headers for the networking filter (no re-register on every change)
-  const headersRef = useRef({ userAgent, referrer, authorization, headers });
-  headersRef.current = { userAgent, referrer, authorization, headers };
+  const headersRef = useRef({ userAgent, referrer, origin, authorization, headers });
+  headersRef.current = { userAgent, referrer, origin, authorization, headers };
 
   const applyNetworkingFilter = useCallback((player) => {
     const engine = player.getNetworkingEngine();
@@ -487,7 +488,7 @@ const Player = ({
       }
       loadGenRef.current += 1;
     };
-  }, [playerReady, manifestUrl, drmScheme, clearKeys, licenseUrl, userAgent, referrer, authorization, headers, autoPlay, channelName, loadStream]);
+  }, [playerReady, manifestUrl, drmScheme, clearKeys, licenseUrl, userAgent, referrer, origin, authorization, headers, autoPlay, channelName, loadStream]);
 
   const handleRetry = () => {
     if (!manifestUrl || !playerReady) return;

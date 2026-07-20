@@ -244,7 +244,7 @@ export function handleProxyHttpError(error) {
  * Advanced options override defaults (see resolveStreamHeaders).
  *
  * @param {object} request Shaka request
- * @param {{ userAgent?: string, referrer?: string, authorization?: string, headers?: object }} channel
+ * @param {{ userAgent?: string, referrer?: string, origin?: string, authorization?: string, headers?: object }} channel
  */
 export function applyProxyRequestHeaders(request, channel = {}) {
   if (!request?.headers) return;
@@ -263,11 +263,11 @@ export function applyProxyRequestHeaders(request, channel = {}) {
 
   if (resolved.referrer) {
     request.headers[PROXY_HEADER.referer] = resolved.referrer;
-    try {
-      request.headers[PROXY_HEADER.origin] = new URL(resolved.referrer).origin;
-    } catch {
-      /* ignore */
-    }
+  }
+
+  // Explicit Origin (from #EXTVLCOPT:http-origin= or form) wins; else derived from referrer
+  if (resolved.origin) {
+    request.headers[PROXY_HEADER.origin] = resolved.origin;
   }
 
   if (resolved.authHeader) {
@@ -293,7 +293,7 @@ export function applyProxyRequestHeaders(request, channel = {}) {
  * Apply channel headers for a direct (non-proxy) browser fetch.
  * User-Agent cannot be overridden in browsers; other headers can.
  * @param {object} request Shaka request
- * @param {{ userAgent?: string, referrer?: string, authorization?: string, headers?: object }} channel
+ * @param {{ userAgent?: string, referrer?: string, origin?: string, authorization?: string, headers?: object }} channel
  */
 export function applyDirectRequestHeaders(request, channel = {}) {
   if (!request?.headers) return;
@@ -302,6 +302,11 @@ export function applyDirectRequestHeaders(request, channel = {}) {
 
   if (resolved.referrer) {
     request.headers['Referer'] = resolved.referrer;
+  }
+
+  // Origin is often forbidden on browser fetch; still set when allowed by Shaka/engine
+  if (resolved.origin) {
+    request.headers['Origin'] = resolved.origin;
   }
 
   if (resolved.authHeader) {

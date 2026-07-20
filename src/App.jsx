@@ -64,6 +64,7 @@ function App() {
     licenseUrl: '',
     userAgent: '',
     referrer: '',
+    origin: '',
     authorization: '',
     headers: {},
   });
@@ -143,6 +144,7 @@ function App() {
     ...cfg,
     userAgent: (cfg.userAgent && String(cfg.userAgent).trim()) || '',
     referrer: (cfg.referrer && String(cfg.referrer).trim()) || '',
+    origin: (cfg.origin && String(cfg.origin).trim()) || '',
     authorization: (cfg.authorization && String(cfg.authorization).trim()) || '',
     headers:
       cfg.headers && typeof cfg.headers === 'object' && !Array.isArray(cfg.headers)
@@ -375,6 +377,7 @@ function App() {
               licenseUrl={activeConfig.licenseUrl}
               userAgent={activeConfig.userAgent}
               referrer={activeConfig.referrer}
+              origin={activeConfig.origin}
               authorization={activeConfig.authorization}
               headers={activeConfig.headers}
               channelName={activeConfig.name}
