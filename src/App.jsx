@@ -54,7 +54,7 @@ function App() {
     setSidebarOpen(false);
   };
 
-  const [formConfig, setFormConfig] = useState({
+  const emptyFormConfig = () => ({
     name: 'New Stream',
     manifestUrl: '',
     group: '',
@@ -64,8 +64,11 @@ function App() {
     licenseUrl: '',
     userAgent: '',
     referrer: '',
-    authorization: ''
+    authorization: '',
+    headers: {},
   });
+
+  const [formConfig, setFormConfig] = useState(emptyFormConfig);
 
   // Save to localStorage when library changes (skip first render)
   useEffect(() => {
@@ -136,35 +139,36 @@ function App() {
     setCollapsedGroups({});
   };
 
+  const normalizeStreamConfig = (cfg) => ({
+    ...cfg,
+    userAgent: (cfg.userAgent && String(cfg.userAgent).trim()) || '',
+    referrer: (cfg.referrer && String(cfg.referrer).trim()) || '',
+    authorization: (cfg.authorization && String(cfg.authorization).trim()) || '',
+    headers:
+      cfg.headers && typeof cfg.headers === 'object' && !Array.isArray(cfg.headers)
+        ? { ...cfg.headers }
+        : {},
+  });
+
   const handlePlay = (e) => {
     if (e) e.preventDefault();
-    setActiveConfig({ ...formConfig });
+    setActiveConfig(normalizeStreamConfig(formConfig));
     setView('player');
     setSidebarOpen(false);
   };
 
   const handleSaveToLibrary = () => {
+    const normalized = normalizeStreamConfig(formConfig);
     if (editingId) {
       setLibrary(prev => prev.map(item =>
-        item.id === editingId ? { ...formConfig, id: editingId } : item
+        item.id === editingId ? { ...normalized, id: editingId } : item
       ));
       setEditingId(null);
     } else {
-      const newItem = { ...formConfig, id: crypto.randomUUID(), addedAt: Date.now() };
+      const newItem = { ...normalized, id: crypto.randomUUID(), addedAt: Date.now() };
       setLibrary(prev => [...prev, newItem]);
     }
-    setFormConfig({
-      name: 'New Stream',
-      manifestUrl: '',
-      group: '',
-      logo: '',
-      drmScheme: '',
-      clearKeys: '',
-      licenseUrl: '',
-      userAgent: '',
-      referrer: '',
-      authorization: ''
-    });
+    setFormConfig(emptyFormConfig());
     setSidebarOpen(false);
   };
 
@@ -179,13 +183,17 @@ function App() {
   };
 
   const handlePlayFromLibrary = (item) => {
-    setActiveConfig(item);
+    setActiveConfig(normalizeStreamConfig(item));
     setView('player');
     setSidebarOpen(false);
   };
 
   const handleEdit = (item) => {
-    setFormConfig({ ...item });
+    setFormConfig({
+      ...emptyFormConfig(),
+      ...item,
+      headers: item.headers && typeof item.headers === 'object' ? { ...item.headers } : {},
+    });
     setEditingId(item.id);
     setSidebarOpen(true);
   };
@@ -252,18 +260,7 @@ function App() {
 
   const handleCancelEdit = () => {
     setEditingId(null);
-    setFormConfig({
-      name: 'New Stream',
-      manifestUrl: '',
-      group: '',
-      logo: '',
-      drmScheme: '',
-      clearKeys: '',
-      licenseUrl: '',
-      userAgent: '',
-      referrer: '',
-      authorization: ''
-    });
+    setFormConfig(emptyFormConfig());
   };
 
   return (

@@ -104,7 +104,14 @@ Hex only (32 characters each). Multiple keys: `kid1:key1,kid2:key2`.
 
 ### Advanced headers
 
-Optional User-Agent, Referrer, and Authorization. Browsers block some header names (e.g. User-Agent); CORS on the stream CDN must allow the origin.
+Optional **User-Agent**, **Referrer**, **Authorization**, and **custom headers** on single streams or from M3U (`#EXTVLCOPT`, `#EXTHTTP`, Kodi `stream_headers`).
+
+- If no User-Agent is set, Gravity uses  
+  `Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/150.0.0.0 Safari/537.36`.
+- Advanced fields override defaults when present.
+- **Authorization** accepts a bare value (`Bearer …` → `Authorization`) or `Key: Value` (custom header name).
+- Custom headers use the same `Key: Value` format (add/remove in Advanced Options).
+- Browsers cannot set `User-Agent` on direct fetches; on Netlify the stream proxy applies channel UA as the real upstream `User-Agent`.
 
 ## Project layout
 
@@ -121,7 +128,12 @@ src/
     m3uParser.js          # M3U + KODIPROP parsing
     m3uGenerator.js       # Library → M3U export
     drm.js                # ClearKey / DRM helpers
+    streamHeaders.js      # Default UA, auth/header resolve
+    streamProxy.js        # Same-origin proxy URL + header helpers
   index.css               # Theme + player styles
+netlify/
+  edge-functions/
+    stream-proxy.js       # CDN proxy; maps X-Stream-* → real headers
 ```
 
 ## Hosting

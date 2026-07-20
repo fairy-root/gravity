@@ -7,6 +7,7 @@ import {
   wrapStreamUrl,
   shouldUseStreamProxy,
   applyProxyRequestHeaders,
+  applyDirectRequestHeaders,
   handleProxyHttpError,
   isProxiedUrl,
 } from '../utils/streamProxy';
@@ -152,23 +153,12 @@ const Player = ({
         );
 
       if (anyProxied) {
-        // Browser cannot set User-Agent; edge proxy applies X-Stream-* upstream
+        // Browser cannot set User-Agent; edge proxy maps X-Stream-* → real headers
         applyProxyRequestHeaders(request, h);
       } else {
-        // Direct fetch (localhost, or CDN that blocks edge IPs but allows CORS)
-        if (h.referrer) {
-          request.headers['Referer'] = h.referrer;
-        }
-        if (h.authorization) {
-          request.headers['Authorization'] = h.authorization;
-        }
-        if (h.headers && typeof h.headers === 'object') {
-          Object.entries(h.headers).forEach(([k, v]) => {
-            if (k && v != null && !/^user-agent$/i.test(k)) {
-              request.headers[k] = String(v);
-            }
-          });
-        }
+        // Direct fetch (localhost, or CDN that blocks edge IPs but allows CORS).
+        // User-Agent still cannot be overridden by the browser.
+        applyDirectRequestHeaders(request, h);
       }
     };
 

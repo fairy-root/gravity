@@ -15,6 +15,78 @@ const emptyItem = () => ({
   authorization: '',
 });
 
+const emptyPendingOpts = () => ({
+  userAgent: '',
+  referrer: '',
+  authorization: '',
+  headers: {},
+});
+
+const stripQuotes = (value) => {
+  const t = String(value ?? '').trim();
+  if (
+    (t.startsWith('"') && t.endsWith('"') && t.length >= 2) ||
+    (t.startsWith("'") && t.endsWith("'") && t.length >= 2)
+  ) {
+    return t.slice(1, -1).trim();
+  }
+  return t;
+};
+
+/**
+ * Apply #EXTVLCOPT:key=value onto an item (or pending bag).
+ * Common forms:
+ *   #EXTVLCOPT:http-user-agent=Mozilla/5.0 ...
+ *   #EXTVLCOPT:http-user-agent="Mozilla/5.0 ..."
+ *   #EXTVLCOPT:http-user-agent=
+ *   #EXTVLCOPT:http-referrer=https://example.com/
+ */
+const applyVlcOpt = (target, propRaw) => {
+  if (!target || propRaw == null) return;
+  const prop = String(propRaw).trim();
+  if (!prop) return;
+
+  const eq = prop.indexOf('=');
+  if (eq === -1) return;
+
+  const key = prop.slice(0, eq).trim().toLowerCase();
+  // Keep everything after the first '=' (UA strings may contain '=')
+  const value = stripQuotes(prop.slice(eq + 1));
+
+  // Empty value (e.g. http-user-agent=) → leave unset so default UA applies
+  if (!value) return;
+
+  if (
+    key === 'http-user-agent' ||
+    key === 'user-agent' ||
+    key === 'http-useragent'
+  ) {
+    target.userAgent = value;
+    return;
+  }
+
+  if (
+    key === 'http-referrer' ||
+    key === 'http-referer' ||
+    key === 'referrer' ||
+    key === 'referer'
+  ) {
+    target.referrer = value;
+  }
+};
+
+const applyPendingOpts = (item, pending) => {
+  if (!item || !pending) return;
+  if (pending.userAgent && !item.userAgent) item.userAgent = pending.userAgent;
+  if (pending.referrer && !item.referrer) item.referrer = pending.referrer;
+  if (pending.authorization && !item.authorization) {
+    item.authorization = pending.authorization;
+  }
+  if (pending.headers && typeof pending.headers === 'object') {
+    item.headers = { ...pending.headers, ...item.headers };
+  }
+};
+
 const parseExtInf = (line, item) => {
   const commaIndex = line.lastIndexOf(',');
   if (commaIndex !== -1) {
@@ -80,7 +152,14 @@ const applyKodiProp = (item, key, value) => {
       const eq = pair.indexOf('=');
       if (eq === -1) return;
       const hk = pair.slice(0, eq).trim();
-      const hv = decodeURIComponent(pair.slice(eq + 1).trim());
+      let hv = pair.slice(eq + 1).trim();
+      try {
+        hv = decodeURIComponent(hv);
+      } catch {
+        /* keep raw */
+      }
+      hv = stripQuotes(hv);
+      if (!hv) return;
       if (/^user-agent$/i.test(hk)) item.userAgent = hv;
       else if (/^referer$/i.test(hk) || /^referrer$/i.test(hk)) item.referrer = hv;
       else if (/^authorization$/i.test(hk)) item.authorization = hv;
@@ -97,42 +176,53 @@ export const parseM3U = (content) => {
   const lines = text.split('\n');
   const playlists = [];
   let currentItem = null;
+  // #EXTVLCOPT often appears *before* #EXTINF in IPTV lists — hold until next item
+  let pendingOpts = emptyPendingOpts();
 
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i].trim();
     if (!line) continue;
 
-    if (line.startsWith('#EXTINF:')) {
+    if (/^#EXTINF:/i.test(line)) {
       currentItem = emptyItem();
       parseExtInf(line, currentItem);
+      // Carry over VLC opts declared before this EXTINF
+      applyPendingOpts(currentItem, pendingOpts);
+      pendingOpts = emptyPendingOpts();
       continue;
     }
 
-    // VLC / IPTV style user-agent
-    if (line.startsWith('#EXTVLCOPT:') && currentItem) {
-      const prop = line.substring(11).trim();
-      if (/^http-user-agent=/i.test(prop)) {
-        currentItem.userAgent = prop.split('=').slice(1).join('=');
-      } else if (/^http-referrer=/i.test(prop) || /^http-referer=/i.test(prop)) {
-        currentItem.referrer = prop.split('=').slice(1).join('=');
+    // VLC / IPTV style options (before or after #EXTINF)
+    // e.g. #EXTVLCOPT:http-user-agent=Mozilla/5.0 ...
+    if (/^#EXTVLCOPT:/i.test(line)) {
+      const prop = line.replace(/^#EXTVLCOPT:/i, '').trim();
+      if (currentItem) {
+        applyVlcOpt(currentItem, prop);
+      } else {
+        applyVlcOpt(pendingOpts, prop);
       }
       continue;
     }
 
-    if (line.startsWith('#EXTHTTP:') && currentItem) {
+    if (/^#EXTHTTP:/i.test(line) && currentItem) {
       try {
-        const json = JSON.parse(line.substring(9).trim());
-        if (json['User-Agent']) currentItem.userAgent = json['User-Agent'];
-        if (json.Referer || json.Referrer) currentItem.referrer = json.Referer || json.Referrer;
-        if (json.Authorization) currentItem.authorization = json.Authorization;
+        const json = JSON.parse(line.replace(/^#EXTHTTP:/i, '').trim());
+        Object.entries(json).forEach(([hk, hv]) => {
+          if (hv == null || hv === '') return;
+          const val = String(hv);
+          if (/^user-agent$/i.test(hk)) currentItem.userAgent = val;
+          else if (/^referer$/i.test(hk) || /^referrer$/i.test(hk)) currentItem.referrer = val;
+          else if (/^authorization$/i.test(hk)) currentItem.authorization = val;
+          else currentItem.headers[hk] = val;
+        });
       } catch {
         // ignore malformed EXTHTTP
       }
       continue;
     }
 
-    if (line.startsWith('#KODIPROP:') && currentItem) {
-      const prop = line.substring(10).trim();
+    if (/^#KODIPROP:/i.test(line) && currentItem) {
+      const prop = line.replace(/^#KODIPROP:/i, '').trim();
       const eqIndex = prop.indexOf('=');
       if (eqIndex === -1) continue;
       const key = prop.substring(0, eqIndex).trim();

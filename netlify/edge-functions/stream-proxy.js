@@ -7,11 +7,16 @@
  * Does not send the browser's Origin, so CDNs that 403 netlify.app still work.
  *
  * Optional client headers (set by Player networking filter):
- *   X-Stream-User-Agent  → User-Agent
- *   X-Stream-Referer     → Referer
- *   X-Stream-Origin      → Origin (upstream)
- *   X-Stream-Authorization → Authorization
+ *   X-Stream-User-Agent        → User-Agent (upstream)
+ *   X-Stream-Referer           → Referer
+ *   X-Stream-Origin            → Origin (upstream)
+ *   X-Stream-Authorization     → Authorization (or custom name)
+ *   X-Stream-Authorization-Name → header name for auth value (default Authorization)
+ *   X-Stream-Extra-Headers     → JSON map of extra headers applied upstream
  */
+
+const DEFAULT_USER_AGENT =
+  'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/150.0.0.0 Safari/537.36';
 
 const HOP_BY_HOP = new Set([
   'connection',
@@ -25,16 +30,33 @@ const HOP_BY_HOP = new Set([
   'host',
   'origin',
   'referer',
-  // Never forward our control headers upstream
+  // Never forward our control headers upstream as-is
   'x-stream-user-agent',
   'x-stream-referer',
   'x-stream-origin',
   'x-stream-authorization',
+  'x-stream-authorization-name',
+  'x-stream-extra-headers',
 ]);
 
 // Hop / framing headers we always drop on the way out
 const STRIP_RESPONSE = new Set([
   'transfer-encoding',
+]);
+
+// Headers that must not be injected from client-controlled extra map
+const FORBIDDEN_EXTRA = new Set([
+  'host',
+  'connection',
+  'keep-alive',
+  'transfer-encoding',
+  'te',
+  'trailer',
+  'trailers',
+  'upgrade',
+  'proxy-authorization',
+  'proxy-authenticate',
+  'content-length',
 ]);
 
 function isPrivateHost(hostname) {
@@ -75,11 +97,9 @@ function buildOutboundHeaders(request) {
   // cannot desync (common proxy corruption).
   outbound.set('Accept-Encoding', 'identity');
 
-  // Stream-specific headers from the Gravity player (channel config)
-  const ua =
-    request.headers.get('X-Stream-User-Agent') ||
-    request.headers.get('User-Agent') ||
-    'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36';
+  // Channel User-Agent overrides the browser's UA. Do not fall back to the
+  // browser User-Agent — use Gravity default when the client did not send one.
+  const ua = request.headers.get('X-Stream-User-Agent') || DEFAULT_USER_AGENT;
   outbound.set('User-Agent', ua);
 
   const referer = request.headers.get('X-Stream-Referer');
@@ -89,7 +109,44 @@ function buildOutboundHeaders(request) {
   if (origin) outbound.set('Origin', origin);
 
   const authorization = request.headers.get('X-Stream-Authorization');
-  if (authorization) outbound.set('Authorization', authorization);
+  if (authorization) {
+    const authName =
+      request.headers.get('X-Stream-Authorization-Name') || 'Authorization';
+    // Only allow a single token header name (no CRLF / injection)
+    if (/^[A-Za-z0-9!#$%&'*+.^_`|~-]+$/.test(authName)) {
+      outbound.set(authName, authorization);
+    } else {
+      outbound.set('Authorization', authorization);
+    }
+  }
+
+  // Custom headers from advanced options / M3U (JSON object)
+  const extraRaw = request.headers.get('X-Stream-Extra-Headers');
+  if (extraRaw) {
+    try {
+      const extra = JSON.parse(extraRaw);
+      if (extra && typeof extra === 'object' && !Array.isArray(extra)) {
+        for (const [key, value] of Object.entries(extra)) {
+          if (!key || value == null) continue;
+          const lower = String(key).toLowerCase();
+          if (FORBIDDEN_EXTRA.has(lower) || HOP_BY_HOP.has(lower)) continue;
+          if (lower.startsWith('x-stream-')) continue;
+          // Dedicated fields already applied — do not let extras override UA
+          if (lower === 'user-agent') {
+            outbound.set('User-Agent', String(value));
+            continue;
+          }
+          if (lower === 'referer' || lower === 'referrer') {
+            outbound.set('Referer', String(value));
+            continue;
+          }
+          outbound.set(String(key), String(value));
+        }
+      }
+    } catch {
+      // ignore malformed extra headers
+    }
+  }
 
   // DRM license / POST bodies
   const contentType = request.headers.get('Content-Type');
@@ -97,6 +154,19 @@ function buildOutboundHeaders(request) {
 
   return outbound;
 }
+
+const CORS_ALLOW_HEADERS = [
+  'Range',
+  'Content-Type',
+  'Accept',
+  'Authorization',
+  'X-Stream-User-Agent',
+  'X-Stream-Referer',
+  'X-Stream-Origin',
+  'X-Stream-Authorization',
+  'X-Stream-Authorization-Name',
+  'X-Stream-Extra-Headers',
+].join(', ');
 
 export default async (request) => {
   // CORS preflight
@@ -106,8 +176,7 @@ export default async (request) => {
       headers: {
         'Access-Control-Allow-Origin': '*',
         'Access-Control-Allow-Methods': 'GET, HEAD, POST, OPTIONS',
-        'Access-Control-Allow-Headers':
-          'Range, Content-Type, Accept, Authorization, X-Stream-User-Agent, X-Stream-Referer, X-Stream-Origin, X-Stream-Authorization',
+        'Access-Control-Allow-Headers': CORS_ALLOW_HEADERS,
         'Access-Control-Max-Age': '86400',
       },
     });

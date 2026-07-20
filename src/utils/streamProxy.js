@@ -9,7 +9,12 @@
  * Inverse problem: some CDNs (Medianova / Starzplay, etc.) allow browser CORS
  * (Access-Control-Allow-Origin: *) but block datacenter/edge IPs — so the
  * proxy gets 403 while a direct browser fetch works. Those hosts bypass proxy.
+ *
+ * User-Agent cannot be set from the browser; channel UA is sent as
+ * X-Stream-User-Agent and the edge proxy applies it as the real User-Agent.
  */
+
+import { resolveStreamHeaders } from './streamHeaders';
 
 const PROXY_PREFIX = '/api/proxy/';
 
@@ -19,6 +24,13 @@ export const PROXY_HEADER = {
   referer: 'X-Stream-Referer',
   origin: 'X-Stream-Origin',
   authorization: 'X-Stream-Authorization',
+  /** JSON map of extra custom headers → applied upstream as real header names */
+  extraHeaders: 'X-Stream-Extra-Headers',
+  /**
+   * When authorization is "Key: Value" with a non-Authorization name,
+   * name is sent here so the edge proxy can set the correct upstream header.
+   */
+  authName: 'X-Stream-Authorization-Name',
 };
 
 /**
@@ -228,51 +240,78 @@ export function handleProxyHttpError(error) {
 
 /**
  * Apply channel headers onto a Shaka networking request when using the proxy.
- * Browser forbids setting User-Agent / often Referer; edge proxy applies them.
+ * Browser forbids setting User-Agent; edge proxy maps X-Stream-* → real headers.
+ * Advanced options override defaults (see resolveStreamHeaders).
+ *
  * @param {object} request Shaka request
  * @param {{ userAgent?: string, referrer?: string, authorization?: string, headers?: object }} channel
  */
 export function applyProxyRequestHeaders(request, channel = {}) {
-  if (!shouldUseStreamProxy() || !request?.headers) return;
+  if (!request?.headers) return;
 
-  // Only attach proxy headers when at least one URI is actually proxied
+  // Only attach proxy control headers when at least one URI is actually proxied
   const uris = request.uris || [];
-  const anyProxied = uris.some((u) => isProxiedUrl(u) || (typeof u === 'string' && u.includes('/api/proxy/')));
+  const anyProxied = uris.some(
+    (u) => isProxiedUrl(u) || (typeof u === 'string' && u.includes('/api/proxy/'))
+  );
   if (!anyProxied) return;
 
-  const { userAgent, referrer, authorization, headers } = channel;
+  const resolved = resolveStreamHeaders(channel);
 
-  if (userAgent) {
-    request.headers[PROXY_HEADER.userAgent] = String(userAgent);
-  }
-  if (referrer) {
-    request.headers[PROXY_HEADER.referer] = String(referrer);
+  // Always send UA so the edge can set the real User-Agent (never browser default)
+  request.headers[PROXY_HEADER.userAgent] = resolved.userAgent;
+
+  if (resolved.referrer) {
+    request.headers[PROXY_HEADER.referer] = resolved.referrer;
     try {
-      request.headers[PROXY_HEADER.origin] = new URL(referrer).origin;
+      request.headers[PROXY_HEADER.origin] = new URL(resolved.referrer).origin;
     } catch {
       /* ignore */
     }
   }
-  if (authorization) {
-    request.headers[PROXY_HEADER.authorization] = String(authorization);
+
+  if (resolved.authHeader) {
+    request.headers[PROXY_HEADER.authorization] = resolved.authHeader.value;
+    // Custom auth header name (e.g. "X-Auth-Token: secret")
+    if (!/^authorization$/i.test(resolved.authHeader.name)) {
+      request.headers[PROXY_HEADER.authName] = resolved.authHeader.name;
+    }
   }
 
-  if (headers && typeof headers === 'object') {
-    Object.entries(headers).forEach(([k, v]) => {
-      if (v == null || !k) return;
-      if (/^user-agent$/i.test(k)) {
-        request.headers[PROXY_HEADER.userAgent] = String(v);
-        return;
-      }
-      if (/^referer$/i.test(k) || /^referrer$/i.test(k)) {
-        request.headers[PROXY_HEADER.referer] = String(v);
-        return;
-      }
-      if (/^authorization$/i.test(k)) {
-        request.headers[PROXY_HEADER.authorization] = String(v);
-        return;
-      }
-      request.headers[k] = String(v);
-    });
+  // Extra custom headers as JSON — edge applies them with their real names
+  const extra = resolved.customHeaders;
+  if (extra && Object.keys(extra).length > 0) {
+    try {
+      request.headers[PROXY_HEADER.extraHeaders] = JSON.stringify(extra);
+    } catch {
+      /* ignore */
+    }
   }
+}
+
+/**
+ * Apply channel headers for a direct (non-proxy) browser fetch.
+ * User-Agent cannot be overridden in browsers; other headers can.
+ * @param {object} request Shaka request
+ * @param {{ userAgent?: string, referrer?: string, authorization?: string, headers?: object }} channel
+ */
+export function applyDirectRequestHeaders(request, channel = {}) {
+  if (!request?.headers) return;
+
+  const resolved = resolveStreamHeaders(channel);
+
+  if (resolved.referrer) {
+    request.headers['Referer'] = resolved.referrer;
+  }
+
+  if (resolved.authHeader) {
+    request.headers[resolved.authHeader.name] = resolved.authHeader.value;
+  }
+
+  Object.entries(resolved.customHeaders || {}).forEach(([k, v]) => {
+    if (!k || v == null) return;
+    // Browser forbids setting User-Agent on fetch/XHR
+    if (/^user-agent$/i.test(k)) return;
+    request.headers[k] = String(v);
+  });
 }
